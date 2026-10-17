@@ -35,6 +35,8 @@
 (() => {
   'use strict';
 
+  const VERSION = '0.3.1';
+
   const CFG = {
     show: true,           // panneau visible au démarrage
     toggleKey: 'F2',      // touche pour l'afficher / le masquer (libre dans le jeu)
@@ -226,8 +228,16 @@
     return true;
   }
   if (!watchCards()) {
-    const wait = new MutationObserver(() => { if (watchCards()) wait.disconnect(); });
-    wait.observe(document.documentElement, { childList: true, subtree: true });
+    // `document` et pas `document.documentElement` : au document-start d'un
+    // userscript, <html> peut ne pas encore exister, et observe(null) lève une
+    // exception qui tuerait tout ce qui suit (crochet d'animation compris).
+    const target = document.documentElement || document;
+    try {
+      const wait = new MutationObserver(() => { if (watchCards()) wait.disconnect(); });
+      wait.observe(target, { childList: true, subtree: true });
+    } catch (e) {
+      console.warn('[psx] stats-mod : surveillance des cartes indisponible —', e.message);
+    }
   }
 
   /* ---------------- dessin ---------------- */
@@ -331,5 +341,6 @@
     module.exports = { CFG, SHOP, RUN, compute, readBase, statOf, titleOf, inRun, isMaxed, DEFAULT_BASE, _take: take, _newChoice: () => { picked = false; }, _reset: startRun, _state: () => ({ base, taken, get picked() { return picked; } }) };
   }
 
-  console.info('[psx] stats-mod installé — panneau des passifs (' + CFG.toggleKey + ' pour masquer)');
+  PSX.stats = VERSION;     // tape `__psx` dans la console : dit ce qui a chargé
+  console.info('[psx] stats-mod ' + VERSION + ' installé — panneau des passifs (' + CFG.toggleKey + ' pour masquer)');
 })();

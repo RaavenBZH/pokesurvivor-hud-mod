@@ -15,6 +15,9 @@ if (!fs.existsSync(USERJS)) {
 }
 const src = fs.readFileSync(USERJS, 'utf8');
 
+const manifestVersion = () =>
+  JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version;
+
 let fails = 0;
 const check = (name, cond, extra = '') => {
   console.log((cond ? '  ok   ' : '  ÉCHEC') + ' ' + name + (cond ? '' : '  ' + extra));
@@ -109,8 +112,8 @@ try {
 } catch (e) { threw = e; }
 check('le userscript s’exécute sans erreur', !threw, threw && threw.message);
 
-check('hud-mod s’est installé', logs.some(l => /hud-mod installé/.test(l)), JSON.stringify(logs));
-check('stats-mod s’est installé', logs.some(l => /stats-mod installé/.test(l)), JSON.stringify(logs));
+check('hud-mod s’est installé', logs.some(l => /hud-mod .* installé/.test(l)), JSON.stringify(logs));
+check('stats-mod s’est installé', logs.some(l => /stats-mod .* installé/.test(l)), JSON.stringify(logs));
 check('aucun avertissement au chargement', !logs.some(l => /^WARN/.test(l)), JSON.stringify(logs));
 check('drapeau partagé window.__psx créé', !!env.window.__psx);
 
@@ -149,6 +152,56 @@ check('une frame complète passe sans erreur', !frameThrew, frameThrew && frameT
 check('toujours aucun avertissement', !logs.some(l => /^WARN/.test(l)), JSON.stringify(logs.filter(l => /^WARN/.test(l))));
 check('la pile de transformations est revenue à l’état neutre',
   ctx._st.length === 0, 'profondeur ' + ctx._st.length);
+
+
+/* ================= conditions de Tampermonkey =================
+ * Un userscript en @run-at document-start s'exécute PLUS TÔT qu'un content
+ * script d'extension : <html> peut ne pas encore exister. Un observe(null)
+ * levait alors une exception qui tuait silencieusement tout ce qui suivait
+ * dans le module (bug corrigé en 0.3.1).
+ */
+console.log('\n--- document-start : <html> pas encore là ---');
+{
+  const logs2 = [];
+  const store2 = {};
+  const ctx2 = new Ctx(canvas);
+  const env2 = {
+    window: { requestAnimationFrame() { return 1; }, addEventListener() {}, dispatchEvent() {}, devicePixelRatio: DPR },
+    // documentElement null, et aucun élément : le DOM n'est pas construit
+    document: { documentElement: null, getElementById: () => null, querySelectorAll: () => [], addEventListener() {} },
+    localStorage: { length: 0, key: () => null, getItem: () => null, setItem() {} },
+    MutationObserver: class {
+      observe(node) {
+        // le vrai navigateur refuse autre chose qu'un Node
+        if (node === null || node === undefined) throw new TypeError("parameter 1 is not of type 'Node'");
+      }
+      disconnect() {}
+    },
+    performance: { now: () => 0 },
+    CanvasRenderingContext2D: Ctx,
+    console: { info: m => logs2.push(m), warn: m => logs2.push('WARN ' + m), log() {} }
+  };
+  let t2 = null;
+  try { new Function(...Object.keys(env2), src)(...Object.values(env2)); } catch (e) { t2 = e; }
+  check('le userscript s’exécute sans <html>', !t2, t2 && t2.message);
+  check('hud-mod installé quand même', logs2.some(l => /hud-mod .* installé/.test(l)), JSON.stringify(logs2));
+  check('stats-mod installé quand même (c’était le bug)',
+    logs2.some(l => /stats-mod .* installé/.test(l)), JSON.stringify(logs2));
+  check('les deux modules se sont annoncés dans __psx',
+    env2.window.__psx && env2.window.__psx.hud && env2.window.__psx.stats,
+    JSON.stringify(env2.window.__psx));
+  check('requestAnimationFrame enveloppé malgré tout',
+    env2.window.requestAnimationFrame.toString().includes('rafOrig'));
+}
+
+console.log('\n--- marqueurs de version (diagnostic console) ---');
+check('__psx.hud porte la version', env.window.__psx.hud === manifestVersion(),
+  String(env.window.__psx.hud));
+check('__psx.stats porte la version', env.window.__psx.stats === manifestVersion(),
+  String(env.window.__psx.stats));
+check('version des modules = version du manifeste',
+  env.window.__psx.hud === manifestVersion() && meta.includes('@version      ' + manifestVersion()));
+
 
 /* ---------- le zip ---------- */
 console.log('\n--- paquet zip ---');

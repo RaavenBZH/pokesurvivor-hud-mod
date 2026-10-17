@@ -34,6 +34,8 @@
 (() => {
   'use strict';
 
+  const VERSION = '0.3.1';
+
   const CFG = {
     lowHp: 0.20,          // seuil du contour rouge
     barW: 320,            // largeur fixe : la barre ne doit pas changer de
@@ -544,5 +546,6 @@
     });
   };
 
-  console.info('[psx] hud-mod installé — barres de vie en bas au centre');
+  PSX.hud = VERSION;       // tape `__psx` dans la console : dit ce qui a chargé
+  console.info('[psx] hud-mod ' + VERSION + ' installé — barres de vie en bas au centre');
 })();

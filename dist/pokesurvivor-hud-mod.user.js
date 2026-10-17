@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokéSurvivor HUD mod
 // @namespace    https://github.com/RaavenBZH/pokesurvivor-hud-mod
-// @version      0.3.0
+// @version      0.3.1
 // @description  Barres de vie en bas au centre, dégradé vert→rouge, alerte de vie basse, flèches de repérage autour du joueur et panneau des passifs. Mod non officiel.
 // @author       RaavenBZH
 // @homepageURL  https://github.com/RaavenBZH/pokesurvivor-hud-mod
@@ -59,6 +59,8 @@
  */
 (() => {
   'use strict';
+
+  const VERSION = '0.3.1';
 
   const CFG = {
     lowHp: 0.20,          // seuil du contour rouge
@@ -570,7 +572,8 @@
     });
   };
 
-  console.info('[psx] hud-mod installé — barres de vie en bas au centre');
+  PSX.hud = VERSION;       // tape `__psx` dans la console : dit ce qui a chargé
+  console.info('[psx] hud-mod ' + VERSION + ' installé — barres de vie en bas au centre');
 })();
 
 /* ======== src/ui/stats-mod.js ======== */
@@ -610,6 +613,8 @@
  */
 (() => {
   'use strict';
+
+  const VERSION = '0.3.1';
 
   const CFG = {
     show: true,           // panneau visible au démarrage
@@ -802,8 +807,16 @@
     return true;
   }
   if (!watchCards()) {
-    const wait = new MutationObserver(() => { if (watchCards()) wait.disconnect(); });
-    wait.observe(document.documentElement, { childList: true, subtree: true });
+    // `document` et pas `document.documentElement` : au document-start d'un
+    // userscript, <html> peut ne pas encore exister, et observe(null) lève une
+    // exception qui tuerait tout ce qui suit (crochet d'animation compris).
+    const target = document.documentElement || document;
+    try {
+      const wait = new MutationObserver(() => { if (watchCards()) wait.disconnect(); });
+      wait.observe(target, { childList: true, subtree: true });
+    } catch (e) {
+      console.warn('[psx] stats-mod : surveillance des cartes indisponible —', e.message);
+    }
   }
 
   /* ---------------- dessin ---------------- */
@@ -907,5 +920,6 @@
     module.exports = { CFG, SHOP, RUN, compute, readBase, statOf, titleOf, inRun, isMaxed, DEFAULT_BASE, _take: take, _newChoice: () => { picked = false; }, _reset: startRun, _state: () => ({ base, taken, get picked() { return picked; } }) };
   }
 
-  console.info('[psx] stats-mod installé — panneau des passifs (' + CFG.toggleKey + ' pour masquer)');
+  PSX.stats = VERSION;     // tape `__psx` dans la console : dit ce qui a chargé
+  console.info('[psx] stats-mod ' + VERSION + ' installé — panneau des passifs (' + CFG.toggleKey + ' pour masquer)');
 })();
