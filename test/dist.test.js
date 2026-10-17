@@ -33,6 +33,10 @@ for (const k of ['@name', '@version', '@match', '@run-at', '@grant', '@downloadU
 }
 check('@grant none (donc monde de la page, indispensable)', /@grant\s+none/.test(meta));
 check('@run-at document-start', /@run-at\s+document-start/.test(meta));
+// Sans ça, Tampermonkey peut injecter dans le monde isolé, où les prototypes
+// natifs sont d'autres objets que ceux de la page : le mod ne ferait rien,
+// sans erreur. C'est la panne qu'on a mis le plus longtemps à trouver.
+check('@inject-into page (monde de la page imposé)', /@inject-into\s+page/.test(meta));
 check('pas de @match localhost dans ce qu’on publie', !/@match.*localhost/.test(meta));
 check('mention de licence obligatoire reprise',
   src.includes('Required Notice: Copyright 2026 JPTER78'));
@@ -201,6 +205,35 @@ check('__psx.stats porte la version', env.window.__psx.stats === manifestVersion
   String(env.window.__psx.stats));
 check('version des modules = version du manifeste',
   env.window.__psx.hud === manifestVersion() && meta.includes('@version      ' + manifestVersion()));
+
+
+
+console.log('\n--- chien de garde du monde isolé ---');
+{
+  // Simule un monde isolé : le canvas du jeu existe (DOM partagé) mais nos
+  // crochets ne sont jamais appelés, parce que le jeu utilise d'autres
+  // prototypes. Le mod doit le DIRE, pas échouer en silence.
+  const logs3 = [];
+  let timer = null;
+  const env3 = {
+    window: { requestAnimationFrame() { return 1; }, addEventListener() {}, dispatchEvent() {}, devicePixelRatio: DPR },
+    document: { documentElement: {}, getElementById: id => (id === 'game' ? canvas : null), querySelectorAll: () => [], addEventListener() {} },
+    localStorage: { length: 0, key: () => null, getItem: () => null, setItem() {} },
+    MutationObserver: class { observe() {} disconnect() {} },
+    performance: { now: () => 0 },
+    CanvasRenderingContext2D: class { getTransform() { return { a: 1, e: 0, f: 0 }; } },
+    setTimeout: (fn, ms) => { timer = { fn, ms }; return 1 },
+    console: { info() {}, warn: m => logs3.push(m), log() {} }
+  };
+  new Function(...Object.keys(env3), src)(...Object.values(env3));
+  check('un chien de garde est armé', !!timer, JSON.stringify(timer && timer.ms));
+  check('il attend quelques secondes', timer && timer.ms >= 3000, timer && String(timer.ms));
+  if (timer) timer.fn();
+  check('il avertit quand rien n’a été dessiné', logs3.some(l => /monde de la page/.test(l)),
+    JSON.stringify(logs3));
+  check('le message dit quoi vérifier (userscript et extension)',
+    logs3.some(l => /@inject-into page/.test(l) && /"world": "MAIN"/.test(l)), JSON.stringify(logs3));
+}
 
 
 /* ---------- le zip ---------- */

@@ -74,6 +74,13 @@ const header = [
   ...matches.map(m => `// @match        ${m}`),
   '// @run-at       document-start',
   '// @grant        none',
+  // DÉCISIF : avec @grant none, Tampermonkey injecte normalement dans le monde
+  // de la page, mais sous Chrome MV3 il peut basculer dans le monde isolé. Or
+  // un monde isolé a ses PROPRES copies des prototypes natifs : nos crochets
+  // sur CanvasRenderingContext2D.prototype n'y toucheraient pas celui du jeu,
+  // et rien ne se passerait, sans la moindre erreur. On l'impose donc.
+  // (Possible ici parce que la page du jeu n'a aucun Content-Security-Policy.)
+  '// @inject-into page',
   '// @license      PolyForm-Noncommercial-1.0.0',
   `// @downloadURL  ${raw}`,
   `// @updateURL    ${raw}`,

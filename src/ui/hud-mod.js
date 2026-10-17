@@ -34,7 +34,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.3.1';
+  const VERSION = '0.3.2';
 
   const CFG = {
     lowHp: 0.20,          // seuil du contour rouge
@@ -93,6 +93,7 @@
   const PSX = window.__psx = window.__psx || { painting: false };
   let armed = true;
   let errors = 0;
+  let hits = 0;            // appels de dessin observés sur #game
 
   /* ---------------- état de la frame ---------------- */
   const me = { frac: 0, hp: 0, max: 0, seen: 0, sawBar: 0 };
@@ -221,6 +222,7 @@
   function guard(fn, fallback) {
     return function (...args) {
       if (PSX.painting || !armed || !isGame(this)) return fallback.apply(this, args);
+      hits++;
       try {
         if (fn.call(this, args) === true) return undefined;      // appel supprimé
       } catch (e) {
@@ -545,6 +547,20 @@
       return r;
     });
   };
+
+  /* Chien de garde. Si le canvas du jeu existe mais qu'aucun de nos crochets
+   * n'a jamais été appelé, c'est que nous ne sommes pas dans le monde de la
+   * page : nos prototypes ne sont pas les siens. Ça n'émet aucune erreur, donc
+   * sans ce message l'échec serait invisible. */
+  setTimeout(() => {
+    if (hits > 0 || !armed) return;
+    if (!document.getElementById('game')) return;        // pas la page du jeu
+    console.warn('[psx] Aucun appel de dessin observé sur #game après 8 s.\n' +
+      'Le mod ne tourne probablement PAS dans le monde de la page : ses crochets\n' +
+      'portent alors sur d’autres prototypes que ceux du jeu, sans erreur visible.\n' +
+      'Userscript : vérifie « @inject-into page » dans son en-tête.\n' +
+      'Extension : vérifie \'"world": "MAIN"\' dans manifest.json.');
+  }, 8000);
 
   PSX.hud = VERSION;       // tape `__psx` dans la console : dit ce qui a chargé
   console.info('[psx] hud-mod ' + VERSION + ' installé — barres de vie en bas au centre');
