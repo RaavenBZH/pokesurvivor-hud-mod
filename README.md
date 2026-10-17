@@ -17,53 +17,66 @@ Détails techniques : [TECHNIQUE.md](TECHNIQUE.md).
 
 ---
 
-## 1. Installer — 2 clics, sans git ni terminal
+## 1. Installer
 
-**1.** Installe [**Tampermonkey**](https://www.tampermonkey.net/) depuis le
-Chrome Web Store (gratuit, une seule fois, c'est le gestionnaire de mods du
-navigateur).
+Deux voies. **La seconde est la plus fiable** — lis la mise en garde.
 
-**2.** Clique ici :
+### A. Extension Chrome — recommandée
 
-### [→ INSTALLER LE MOD](../../raw/main/dist/pokesurvivor-hud-mod.user.js)
+Déterministe : le manifeste impose `"world": "MAIN"`, donc le mod tourne
+forcément dans le bon contexte.
 
-Tampermonkey ouvre une page de confirmation, tu cliques sur **Installer**.
-C'est fini — ouvre https://pokesurvivor.com et lance une partie.
+1. Télécharge le `.zip` de la [dernière version](../../releases/latest) et
+   dézippe-le (le dossier doit **rester** là, Chrome le relit à chaque
+   démarrage). Ou clone ce dépôt.
+2. `chrome://extensions` → active **« Mode développeur »** en haut à droite.
+3. **« Charger l'extension non empaquetée »** → choisis le dossier qui contient
+   `manifest.json`.
 
-Les mises à jour arrivent ensuite **automatiquement**. Rien à refaire.
+Les mises à jour sont à refaire à la main (retélécharger, puis **↻** sur la
+carte de l'extension).
 
-> Ça marche aussi avec [Violentmonkey](https://violentmonkey.github.io/), et sur
-> Firefox, Edge ou Opera avec la même extension.
+### B. Userscript — un clic, mais pas toujours
 
-**Pour désinstaller** : icône Tampermonkey → *Tableau de bord* → la corbeille à
-côté du mod. Ou simplement l'interrupteur pour le désactiver sans le supprimer.
+1. Installe [Tampermonkey](https://www.tampermonkey.net/) (une fois)
+2. **[→ Installer le mod](../../raw/main/dist/pokesurvivor-hud-mod.user.js)**
+
+Mises à jour automatiques ensuite.
+
+> **⚠ À savoir, et ce n'est pas anodin.**
+> Ce mod doit s'exécuter dans le **monde de la page** : il remplace des méthodes
+> de `CanvasRenderingContext2D.prototype`, et un monde isolé en possède ses
+> propres copies — les crochets ne toucheraient alors pas celles du jeu, sans
+> lever la moindre erreur. L'en-tête déclare donc `@inject-into page`, mais
+> Tampermonkey n'y obéit pas toujours selon la version de Chrome.
+>
+> Par ailleurs, depuis Chrome 120, Tampermonkey a besoin que **Mode développeur**
+> soit activé dans `chrome://extensions` pour exécuter quoi que ce soit : sans
+> ça, le script s'affiche « installé » et ne tourne jamais.
+>
+> Comme il faut de toute façon activer Mode développeur, la voie A ne coûte pas
+> plus et supprime cette incertitude.
 
 ### Vérifier que c'est chargé
-En jeu, `F12` → onglet Console. Tu dois voir :
+En jeu, `F12` → onglet Console :
 
 ```
-[psx] hud-mod installé — barres de vie en bas au centre
-[psx] stats-mod installé — panneau des passifs (F2 pour masquer)
+[psx] hud-mod 0.3.2 installé — barres de vie en bas au centre
+[psx] stats-mod 0.3.2 installé — panneau des passifs (F2 pour masquer)
 ```
 
-<details>
-<summary><b>Autre méthode : extension Chrome (zip)</b> — si tu ne veux pas de Tampermonkey</summary>
+Ou tape `__psx` dans la console : tu dois voir
+`{painting: false, hud: "0.3.2", stats: "0.3.2"}`.
 
-Ce n'est **pas** du plug-and-play : Chrome n'autorise l'installation en un clic
-que depuis son Web Store, et un `.crx` hors Store est bloqué.
+| Console | Signification | Remède |
+|---|---|---|
+| les deux lignes, et le HUD a changé | tout va bien | — |
+| les deux lignes **+** `Aucun appel de dessin observé` | le mod ne tourne pas dans le monde de la page | passe à la voie A |
+| **rien du tout** | le script ne s'exécute pas | Mode développeur dans `chrome://extensions` ; ou voie A |
 
-1. Télécharge le `.zip` de la [dernière version](../../releases/latest).
-2. Dézippe-le où tu veux — le dossier doit **rester** là, Chrome le relit à
-   chaque démarrage.
-3. `chrome://extensions` → active **« Mode développeur »** (en haut à droite).
-4. **« Charger l'extension non empaquetée »** → choisis le dossier dézippé
-   (celui qui contient `manifest.json`).
-
-Deux inconvénients : Chrome affiche un bandeau « Désactiver les extensions en
-mode développeur » à chaque démarrage, et les mises à jour sont à refaire à la
-main. C'est pour ça que le userscript est recommandé.
-
-</details>
+> Attention : lancé depuis l'**application installée** (PWA) plutôt que dans un
+> onglet, ni Tampermonkey ni les extensions n'injectent toujours. Joue dans un
+> onglet normal.
 
 ---
 
@@ -200,12 +213,13 @@ Après chaque modification, applique-la : voir §4.
 ## 4. Mettre à jour
 
 ### a) Recevoir les nouvelles versions du mod
+- **Extension** : retélécharge le zip de la [dernière
+  version](../../releases/latest) et remplace le dossier (ou `git pull`), puis
+  **↻** sur la carte dans `chrome://extensions`.
 - **Userscript** : rien à faire, Tampermonkey vérifie tout seul. Pour forcer :
   son icône → *Tableau de bord* → onglet *Utilitaires* → *Rechercher des mises
-  à jour*.
-- **Extension** : retélécharge le zip de la [dernière
-  version](../../releases/latest), remplace le dossier, puis **↻** sur la carte
-  dans `chrome://extensions`.
+  à jour*. Une réinstallation par le lien est plus sûre quand l'en-tête a changé
+  (les métadonnées d'injection ne sont pas toujours mises à jour).
 
 ### a-bis) Après avoir modifié le code toi-même
 1. `chrome://extensions` → bouton **↻** sur la carte du mod.
