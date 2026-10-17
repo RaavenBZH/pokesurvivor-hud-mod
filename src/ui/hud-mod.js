@@ -34,7 +34,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.3.2';
+  const VERSION = '0.4.0';
 
   const CFG = {
     lowHp: 0.20,          // seuil du contour rouge
@@ -558,8 +558,7 @@
     console.warn('[psx] Aucun appel de dessin observé sur #game après 8 s.\n' +
       'Le mod ne tourne probablement PAS dans le monde de la page : ses crochets\n' +
       'portent alors sur d’autres prototypes que ceux du jeu, sans erreur visible.\n' +
-      'Userscript : vérifie « @inject-into page » dans son en-tête.\n' +
-      'Extension : vérifie \'"world": "MAIN"\' dans manifest.json.');
+      'Vérifie que manifest.json déclare bien \'"world": "MAIN"\'.');
   }, 8000);
 
   PSX.hud = VERSION;       // tape `__psx` dans la console : dit ce qui a chargé

@@ -19,64 +19,57 @@ Détails techniques : [TECHNIQUE.md](TECHNIQUE.md).
 
 ## 1. Installer
 
-Deux voies. **La seconde est la plus fiable** — lis la mise en garde.
+Chrome, Edge, Brave, Opera — tout navigateur basé sur Chromium.
 
-### A. Extension Chrome — recommandée
+**1.** Récupère le mod, au choix :
+- le `.zip` de la [dernière version](../../releases/latest), **dézippé** ;
+- ou `git clone https://github.com/RaavenBZH/pokesurvivor-hud-mod`.
 
-Déterministe : le manifeste impose `"world": "MAIN"`, donc le mod tourne
-forcément dans le bon contexte.
+Le dossier doit **rester** à sa place : Chrome le relit à chaque démarrage.
 
-1. Télécharge le `.zip` de la [dernière version](../../releases/latest) et
-   dézippe-le (le dossier doit **rester** là, Chrome le relit à chaque
-   démarrage). Ou clone ce dépôt.
-2. `chrome://extensions` → active **« Mode développeur »** en haut à droite.
-3. **« Charger l'extension non empaquetée »** → choisis le dossier qui contient
-   `manifest.json`.
+**2.** Ouvre `chrome://extensions` et active **« Mode développeur »** (en haut
+à droite).
 
-Les mises à jour sont à refaire à la main (retélécharger, puis **↻** sur la
-carte de l'extension).
+**3.** Clique **« Charger l'extension non empaquetée »** et choisis le dossier
+qui contient `manifest.json`.
 
-### B. Userscript — un clic, mais pas toujours
+**4.** Ouvre https://pokesurvivor.com **dans un onglet normal** et lance une
+partie.
 
-1. Installe [Tampermonkey](https://www.tampermonkey.net/) (une fois)
-2. **[→ Installer le mod](../../raw/main/dist/pokesurvivor-hud-mod.user.js)**
-
-Mises à jour automatiques ensuite.
-
-> **⚠ À savoir, et ce n'est pas anodin.**
-> Ce mod doit s'exécuter dans le **monde de la page** : il remplace des méthodes
-> de `CanvasRenderingContext2D.prototype`, et un monde isolé en possède ses
-> propres copies — les crochets ne toucheraient alors pas celles du jeu, sans
-> lever la moindre erreur. L'en-tête déclare donc `@inject-into page`, mais
-> Tampermonkey n'y obéit pas toujours selon la version de Chrome.
->
-> Par ailleurs, depuis Chrome 120, Tampermonkey a besoin que **Mode développeur**
-> soit activé dans `chrome://extensions` pour exécuter quoi que ce soit : sans
-> ça, le script s'affiche « installé » et ne tourne jamais.
->
-> Comme il faut de toute façon activer Mode développeur, la voie A ne coûte pas
-> plus et supprime cette incertitude.
+> Chrome affichera un bandeau « Désactiver les extensions en mode développeur »
+> à chaque démarrage. C'est normal pour une extension chargée hors du Web Store,
+> et il n'y a pas d'autre voie : Chrome bloque l'installation d'un `.crx` hors
+> de son Store, et le passage par le Store demande un compte développeur payant.
 
 ### Vérifier que c'est chargé
+
 En jeu, `F12` → onglet Console :
 
 ```
-[psx] hud-mod 0.3.2 installé — barres de vie en bas au centre
-[psx] stats-mod 0.3.2 installé — panneau des passifs (F2 pour masquer)
+[psx] hud-mod 0.4.0 installé — barres de vie en bas au centre
+[psx] stats-mod 0.4.0 installé — panneau des passifs (F2 pour masquer)
 ```
 
 Ou tape `__psx` dans la console : tu dois voir
-`{painting: false, hud: "0.3.2", stats: "0.3.2"}`.
+`{painting: false, hud: "0.4.0", stats: "0.4.0"}`.
 
-| Console | Signification | Remède |
+| Console | Cause | Remède |
 |---|---|---|
 | les deux lignes, et le HUD a changé | tout va bien | — |
-| les deux lignes **+** `Aucun appel de dessin observé` | le mod ne tourne pas dans le monde de la page | passe à la voie A |
-| **rien du tout** | le script ne s'exécute pas | Mode développeur dans `chrome://extensions` ; ou voie A |
+| les deux lignes **+** `Aucun appel de dessin observé` | le mod ne tourne pas dans le monde de la page | vérifie `"world": "MAIN"` dans `manifest.json` |
+| **rien du tout** | l'extension n'est pas active sur cette page | vérifie qu'elle est activée dans `chrome://extensions`, et que tu es bien sur `pokesurvivor.com` dans un **onglet** |
 
-> Attention : lancé depuis l'**application installée** (PWA) plutôt que dans un
-> onglet, ni Tampermonkey ni les extensions n'injectent toujours. Joue dans un
-> onglet normal.
+> **Pas depuis l'application installée.** Le jeu s'installe comme application
+> (PWA) ; dans une fenêtre d'application autonome, les extensions n'injectent
+> pas de façon fiable. Joue dans un onglet.
+
+### Note sur Tampermonkey
+Les versions ≤ 0.3.2 proposaient aussi un userscript. **Abandonné en 0.4.0** :
+depuis Chrome 120, Tampermonkey exige de toute façon le mode développeur, et il
+n'obéit pas toujours à `@inject-into page` — or ce mod n'a aucun sens hors du
+monde de la page. L'extension ne coûte donc pas plus cher et ne laisse aucune
+incertitude. Si tu avais installé le userscript, **supprime-le** de Tampermonkey
+(son URL de mise à jour ne répond plus).
 
 ---
 
@@ -213,15 +206,11 @@ Après chaque modification, applique-la : voir §4.
 ## 4. Mettre à jour
 
 ### a) Recevoir les nouvelles versions du mod
-- **Extension** : retélécharge le zip de la [dernière
-  version](../../releases/latest) et remplace le dossier (ou `git pull`), puis
-  **↻** sur la carte dans `chrome://extensions`.
-- **Userscript** : rien à faire, Tampermonkey vérifie tout seul. Pour forcer :
-  son icône → *Tableau de bord* → onglet *Utilitaires* → *Rechercher des mises
-  à jour*. Une réinstallation par le lien est plus sûre quand l'en-tête a changé
-  (les métadonnées d'injection ne sont pas toujours mises à jour).
+Retélécharge le zip de la [dernière version](../../releases/latest) et remplace
+le dossier — ou `git pull` si tu as cloné. Puis **↻** sur la carte du mod dans
+`chrome://extensions`, et recharge la page du jeu.
 
-### a-bis) Après avoir modifié le code toi-même
+### b-bis) Après avoir modifié le code toi-même
 1. `chrome://extensions` → bouton **↻** sur la carte du mod.
 2. Recharge la page du jeu (`Ctrl+R` / `Cmd+R`).
 
@@ -306,16 +295,18 @@ jour-là.
 
 | Symptôme | Cause probable | Quoi faire |
 |---|---|---|
-| Rien ne change en jeu | mod pas chargé | Console : les deux lignes `[psx] … installé` sont-elles là ? Sinon : userscript → vérifie qu'il est activé dans Tampermonkey ; extension → vérifie que tu as choisi le dossier contenant `manifest.json` |
-| Chrome a désactivé l'extension au démarrage | bandeau « extensions en mode développeur » | Réactive-la, ou passe au userscript (§1A), qui n'a pas ce problème |
+| Rien ne change en jeu | mod pas chargé | Console : les deux lignes `[psx] … installé` sont-elles là ? Sinon vérifie que tu as choisi le dossier contenant `manifest.json`, et que l'extension est activée |
+| Chrome a désactivé l'extension au démarrage | bandeau « extensions en mode développeur » | Réactive-la depuis le bandeau ou `chrome://extensions` |
+| Rien ne change, mais la console est vide | tu joues peut-être dans l'application installée (PWA) | Ouvre le jeu dans un onglet normal |
 | La barre est revenue en haut à gauche | le jeu a changé son HUD | §4c |
 | `[psx] hud-mod désarmé : …` en console | 30 erreurs d'affilée, le module s'est coupé | Note le message et relance `node tools/verif-signatures.js` puis `node test/hud-mod.test.js` |
 | Les flèches restent au bord | `arrows: false`, ou les marges ont changé | §3, puis §4c |
 | Pas de panneau des passifs | masqué (`F2`), ou `show: false` | Appuie sur `F2` en partie |
+| `Aucun appel de dessin observé sur #game` | le mod tourne hors du monde de la page | `manifest.json` doit déclarer `"world": "MAIN"` |
 | Les passifs affichent des valeurs douteuses | le jeu a été rééquilibré | §4c — c'est exactement ce que le script détecte |
 | Les passifs partent d'une base fausse | achat en boutique pas encore enregistré | Reviens au menu puis relance une partie |
 | Le jeu rame | peu probable (le surcoût est de l'ordre de la fraction de milliseconde) | Active l'affichage des FPS dans les **Ajustes** du jeu et compare extension activée / désactivée |
-| Je veux tout désactiver d'un coup | — | Interrupteur sur la carte de l'extension dans `chrome://extensions`, puis recharge la page |
+| Je veux tout désactiver d'un coup | — | Interrupteur sur la carte du mod dans `chrome://extensions`, puis recharge la page |
 
 **Garantie de non-casse** : l'extension n'écrit jamais dans le jeu, ne touche ni
 aux sauvegardes ni au réseau. Au moindre doute elle se désarme et le HUD

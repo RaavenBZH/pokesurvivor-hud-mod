@@ -1,19 +1,24 @@
-/* Teste l'ARTÉFACT publié, pas les sources : le userscript est la
- * concaténation des deux modules, et rien ne garantit a priori qu'ils
- * cohabitent (ils enveloppent les mêmes méthodes de canvas et le même
- * requestAnimationFrame, et partagent window.__psx).
+/* Teste le PAQUET tel que Chrome le charge, pas les sources isolées :
+ *   - le manifeste déclare-t-il les invariants sans lesquels le mod ne fait
+ *     rien (world MAIN, document_start) ?
+ *   - les deux content scripts cohabitent-ils ? Ils enveloppent les mêmes
+ *     méthodes de canvas et le même requestAnimationFrame, et partagent
+ *     window.__psx. Chrome les exécute l'un après l'autre dans le même monde :
+ *     on reproduit cet enchaînement.
+ *   - que se passe-t-il au document_start, quand <html> n'existe pas encore ?
+ *   - et si le mod se retrouvait malgré tout hors du monde de la page ?
  *
- *   node tools/build.js && node test/dist.test.js
+ *   node tools/build.js && node test/package.test.js
  */
 const fs = require('fs');
 const path = require('path');
 
-const USERJS = path.join(__dirname, '..', 'dist', 'pokesurvivor-hud-mod.user.js');
-if (!fs.existsSync(USERJS)) {
-  console.error('dist/ absent : lance d’abord `node tools/build.js`.');
-  process.exit(2);
-}
-const src = fs.readFileSync(USERJS, 'utf8');
+const ROOT = path.join(__dirname, '..');
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+const cs = manifest.content_scripts[0];
+// Chrome exécute les content scripts dans l'ordre du manifeste, dans le même
+// monde : les concaténer reproduit fidèlement cet enchaînement.
+const src = cs.js.map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n;\n');
 
 const manifestVersion = () =>
   JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8')).version;
@@ -24,23 +29,25 @@ const check = (name, cond, extra = '') => {
   if (!cond) fails++;
 };
 
-/* ---------- métadonnées ---------- */
-console.log('\n--- bloc de métadonnées ---');
-const meta = src.slice(0, src.indexOf('// ==/UserScript=='));
-check('bloc UserScript présent et fermé', src.startsWith('// ==UserScript==') && src.includes('// ==/UserScript=='));
-for (const k of ['@name', '@version', '@match', '@run-at', '@grant', '@downloadURL', '@updateURL', '@license']) {
-  check('métadonnée ' + k, meta.includes(k));
-}
-check('@grant none (donc monde de la page, indispensable)', /@grant\s+none/.test(meta));
-check('@run-at document-start', /@run-at\s+document-start/.test(meta));
-// Sans ça, Tampermonkey peut injecter dans le monde isolé, où les prototypes
-// natifs sont d'autres objets que ceux de la page : le mod ne ferait rien,
-// sans erreur. C'est la panne qu'on a mis le plus longtemps à trouver.
-check('@inject-into page (monde de la page imposé)', /@inject-into\s+page/.test(meta));
-check('pas de @match localhost dans ce qu’on publie', !/@match.*localhost/.test(meta));
-check('mention de licence obligatoire reprise',
-  src.includes('Required Notice: Copyright 2026 JPTER78'));
-check('mod annoncé comme non officiel', /NON officiel/i.test(src));
+/* ---------- le manifeste ---------- */
+console.log('\n--- manifeste ---');
+check('manifest_version 3', manifest.manifest_version === 3);
+check('un seul bloc de content scripts', manifest.content_scripts.length === 1);
+// L'INVARIANT : un monde isolé a ses propres copies des prototypes natifs, donc
+// hors du monde de la page les crochets ne toucheraient pas ceux du jeu — et le
+// mod ne ferait rien, sans erreur. C'est la panne la plus coûteuse qu'on ait eue.
+check('world = MAIN (sinon le mod ne fait rien, en silence)', cs.world === 'MAIN', String(cs.world));
+check('run_at = document_start', cs.run_at === 'document_start', String(cs.run_at));
+check('les deux modules sont déclarés, dans l’ordre',
+  cs.js[0].endsWith('hud-mod.js') && cs.js[1].endsWith('stats-mod.js'), JSON.stringify(cs.js));
+check('tous les fichiers déclarés existent',
+  cs.js.every(f => fs.existsSync(path.join(ROOT, f))), JSON.stringify(cs.js));
+check('aucune permission demandée',
+  !manifest.permissions && !manifest.host_permissions,
+  JSON.stringify({ p: manifest.permissions, h: manifest.host_permissions }));
+check('le site du jeu est couvert',
+  cs.matches.some(m => /pokesurvivor\.com/.test(m)), JSON.stringify(cs.matches));
+check('pas d’injection dans les sous-cadres', cs.all_frames === false);
 
 /* ---------- exécution des deux modules ensemble ---------- */
 console.log('\n--- exécution dans un faux navigateur ---');
@@ -114,7 +121,7 @@ let threw = null;
 try {
   new Function(...Object.keys(env), src)(...Object.values(env));
 } catch (e) { threw = e; }
-check('le userscript s’exécute sans erreur', !threw, threw && threw.message);
+check('les deux content scripts s’exécutent sans erreur', !threw, threw && threw.message);
 
 check('hud-mod s’est installé', logs.some(l => /hud-mod .* installé/.test(l)), JSON.stringify(logs));
 check('stats-mod s’est installé', logs.some(l => /stats-mod .* installé/.test(l)), JSON.stringify(logs));
@@ -158,13 +165,13 @@ check('la pile de transformations est revenue à l’état neutre',
   ctx._st.length === 0, 'profondeur ' + ctx._st.length);
 
 
-/* ================= conditions de Tampermonkey =================
- * Un userscript en @run-at document-start s'exécute PLUS TÔT qu'un content
- * script d'extension : <html> peut ne pas encore exister. Un observe(null)
- * levait alors une exception qui tuait silencieusement tout ce qui suivait
- * dans le module (bug corrigé en 0.3.1).
+/* ================= DOM pas encore construit =================
+ * En document_start, <html> peut ne pas encore exister. Un observe(null) levait
+ * alors une exception qui tuait silencieusement tout ce qui suivait dans le
+ * module (bug trouvé en 0.3.1). Chrome construit en général documentElement
+ * avant d'injecter, mais rien ne le garantit — et ça avait mordu ailleurs.
  */
-console.log('\n--- document-start : <html> pas encore là ---');
+console.log('\n--- document_start : <html> pas encore là ---');
 {
   const logs2 = [];
   const store2 = {};
@@ -187,7 +194,7 @@ console.log('\n--- document-start : <html> pas encore là ---');
   };
   let t2 = null;
   try { new Function(...Object.keys(env2), src)(...Object.values(env2)); } catch (e) { t2 = e; }
-  check('le userscript s’exécute sans <html>', !t2, t2 && t2.message);
+  check('les deux scripts s’exécutent sans <html>', !t2, t2 && t2.message);
   check('hud-mod installé quand même', logs2.some(l => /hud-mod .* installé/.test(l)), JSON.stringify(logs2));
   check('stats-mod installé quand même (c’était le bug)',
     logs2.some(l => /stats-mod .* installé/.test(l)), JSON.stringify(logs2));
@@ -204,7 +211,7 @@ check('__psx.hud porte la version', env.window.__psx.hud === manifestVersion(),
 check('__psx.stats porte la version', env.window.__psx.stats === manifestVersion(),
   String(env.window.__psx.stats));
 check('version des modules = version du manifeste',
-  env.window.__psx.hud === manifestVersion() && meta.includes('@version      ' + manifestVersion()));
+  env.window.__psx.hud === manifestVersion() && env.window.__psx.stats === manifestVersion());
 
 
 
@@ -231,25 +238,26 @@ console.log('\n--- chien de garde du monde isolé ---');
   if (timer) timer.fn();
   check('il avertit quand rien n’a été dessiné', logs3.some(l => /monde de la page/.test(l)),
     JSON.stringify(logs3));
-  check('le message dit quoi vérifier (userscript et extension)',
-    logs3.some(l => /@inject-into page/.test(l) && /"world": "MAIN"/.test(l)), JSON.stringify(logs3));
+  check('le message dit quoi vérifier',
+    logs3.some(l => /"world": "MAIN"/.test(l)), JSON.stringify(logs3));
 }
 
 
 /* ---------- le zip ---------- */
 console.log('\n--- paquet zip ---');
 const { execFileSync } = require('child_process');
-const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8'));
-const zip = path.join(__dirname, '..', 'dist', `pokesurvivor-hud-mod-${manifest.version}.zip`);
-check('zip présent', fs.existsSync(zip));
-if (fs.existsSync(zip)) {
+const zip = path.join(ROOT, 'dist', `pokesurvivor-hud-mod-${manifest.version}.zip`);
+// Le zip n'existe pas encore au premier passage (build.js lance les tests AVANT
+// de l'empaqueter, puis relance ce fichier une fois le zip produit).
+if (!fs.existsSync(zip)) {
+  console.log('  (zip pas encore fabriqué — contrôles du paquet ignorés)');
+} else {
   const list = execFileSync('unzip', ['-Z1', zip]).toString();
   for (const f of ['manifest.json', 'src/ui/hud-mod.js', 'src/ui/stats-mod.js', 'LICENSE', 'LICENSE-NONCOMMERCIAL.md']) {
     check('zip contient ' + f, list.includes(f));
   }
   check('zip SANS les tests ni l’outillage', !/test\/|tools\//.test(list));
-  check('version du userscript = version du manifeste',
-    meta.includes('@version      ' + manifest.version));
+  check('zip SANS userscript (format abandonné en 0.4.0)', !/user\.js/.test(list));
 }
 
 console.log(fails === 0 ? '\nTOUT PASSE\n' : `\n${fails} ÉCHEC(S)\n`);

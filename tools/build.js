@@ -1,22 +1,18 @@
-/* ============ build.js — fabrique les deux formats de distribution ============
+/* ============ build.js — fabrique le zip de l'extension ============
  *
  *   node tools/build.js
  *
- * Produit dans dist/ :
- *   pokesurvivor-hud-mod-<version>.zip   l'extension, à dézipper et charger
- *                                        dans chrome://extensions
- *   pokesurvivor-hud-mod.user.js         le même code en userscript, pour
- *                                        Tampermonkey / Violentmonkey :
- *                                        installation en un clic et mises à
- *                                        jour automatiques
+ * Produit dist/pokesurvivor-hud-mod-<version>.zip : le dossier à dézipper puis
+ * à charger dans chrome://extensions (« Charger l'extension non empaquetée »).
  *
- * Le userscript est la simple concaténation des deux modules, dans l'ordre du
- * manifeste, précédée du bloc de métadonnées. C'est possible parce que les deux
- * sont des IIFE sans dépendance, conçues pour le monde de la page : `@grant
- * none` les y place, ce qui est exactement ce dont elles ont besoin.
+ * Rien n'est minifié ni transformé : ce qu'on publie est lisible, et c'est la
+ * moindre des choses pour du code qu'on installe dans son navigateur.
  *
- * Rien n'est minifié ni transformé : ce qu'on publie est lisible, et c'est
- * voulu pour un mod qu'on installe dans son navigateur.
+ * Le zip n'est pas versionné dans le dépôt — il est fabriqué à la demande et
+ * attaché aux releases. Cloner le dépôt suffit d'ailleurs à charger
+ * l'extension : le manifeste est à la racine.
+ *
+ * On refuse de produire un paquet dont les tests échouent.
  */
 'use strict';
 const fs = require('fs');
@@ -26,20 +22,34 @@ const { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
 const NAME = 'pokesurvivor-hud-mod';
-const REPO = process.env.PSX_REPO || 'RaavenBZH/pokesurvivor-hud-mod';
 
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
 const version = manifest.version;
-const files = manifest.content_scripts[0].js;
-const matches = manifest.content_scripts[0].matches.filter(m => !/localhost/.test(m));
+const cs = manifest.content_scripts[0];
 
-/* ---------- contrôles avant de publier quoi que ce soit ---------- */
+/* ---------- l'invariant critique ----------
+ * Ce mod remplace des méthodes de CanvasRenderingContext2D.prototype. Un monde
+ * isolé possède ses PROPRES copies des prototypes natifs : hors du monde de la
+ * page, les crochets ne toucheraient pas ceux du jeu et le mod ne ferait rien,
+ * sans lever la moindre erreur. C'est la panne qui a coûté le plus cher à
+ * diagnostiquer — on la verrouille ici.
+ */
+if (cs.world !== 'MAIN') {
+  console.error('ARRÊT : manifest.json doit déclarer "world": "MAIN". Sans ça le mod ne fait rien.');
+  process.exit(1);
+}
+if (cs.run_at !== 'document_start') {
+  console.error('ARRÊT : manifest.json doit déclarer "run_at": "document_start".');
+  process.exit(1);
+}
+
+/* ---------- contrôles ---------- */
 console.log('Contrôles…');
-for (const f of [...files, 'tools/verif-signatures.js', 'test/hud-mod.test.js',
-                 'test/stats-mod.test.js', 'test/dist.test.js']) {
+const TESTS = ['test/hud-mod.test.js', 'test/stats-mod.test.js', 'test/package.test.js'];
+for (const f of [...cs.js, 'tools/verif-signatures.js', ...TESTS]) {
   execFileSync(process.execPath, ['--check', path.join(ROOT, f)]);
 }
-for (const t of ['test/hud-mod.test.js', 'test/stats-mod.test.js']) {
+for (const t of TESTS) {
   try {
     execFileSync(process.execPath, [path.join(ROOT, t)], { stdio: 'pipe' });
     console.log('  ok   ' + t);
@@ -50,71 +60,27 @@ for (const t of ['test/hud-mod.test.js', 'test/stats-mod.test.js']) {
   }
 }
 
+/* ---------- le zip ---------- */
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });
 
-/* ---------- 1. le zip de l'extension ---------- */
 const zipName = `${NAME}-${version}.zip`;
 execFileSync('zip', ['-r', '-q', path.join(DIST, zipName),
   'manifest.json', 'src', 'README.md', 'TECHNIQUE.md', 'LICENSE', 'LICENSE-NONCOMMERCIAL.md'],
   { cwd: ROOT });
-console.log(`\ndist/${zipName}  (${(fs.statSync(path.join(DIST, zipName)).size / 1024).toFixed(0)} Ko)`);
+const ko = (fs.statSync(path.join(DIST, zipName)).size / 1024).toFixed(0);
+console.log(`\ndist/${zipName}  (${ko} Ko)`);
 
-/* ---------- 2. le userscript ---------- */
-const raw = `https://raw.githubusercontent.com/${REPO}/main/dist/${NAME}.user.js`;
-const header = [
-  '// ==UserScript==',
-  '// @name         PokéSurvivor HUD mod',
-  `// @namespace    https://github.com/${REPO}`,
-  `// @version      ${version}`,
-  '// @description  Barres de vie en bas au centre, dégradé vert→rouge, alerte de vie basse, flèches de repérage autour du joueur et panneau des passifs. Mod non officiel.',
-  '// @author       RaavenBZH',
-  `// @homepageURL  https://github.com/${REPO}`,
-  `// @supportURL   https://github.com/${REPO}/issues`,
-  ...matches.map(m => `// @match        ${m}`),
-  '// @run-at       document-start',
-  '// @grant        none',
-  // DÉCISIF : avec @grant none, Tampermonkey injecte normalement dans le monde
-  // de la page, mais sous Chrome MV3 il peut basculer dans le monde isolé. Or
-  // un monde isolé a ses PROPRES copies des prototypes natifs : nos crochets
-  // sur CanvasRenderingContext2D.prototype n'y toucheraient pas celui du jeu,
-  // et rien ne se passerait, sans la moindre erreur. On l'impose donc.
-  // (Possible ici parce que la page du jeu n'a aucun Content-Security-Policy.)
-  '// @inject-into page',
-  '// @license      PolyForm-Noncommercial-1.0.0',
-  `// @downloadURL  ${raw}`,
-  `// @updateURL    ${raw}`,
-  '// ==/UserScript==',
-  '',
-  '/* Required Notice: Copyright 2026 JPTER78 (https://github.com/JPTER78/pokesurvivor)',
-  ' *',
-  ' * Œuvre dérivée de PokéSurvivor, sous PolyForm Noncommercial License 1.0.0',
-  ' * (https://polyformproject.org/licenses/noncommercial/1.0.0). Usage non',
-  ' * commercial uniquement. Mod NON officiel, sans affiliation avec l’auteur du',
-  ` * jeu ni avec Nintendo. Détail : https://github.com/${REPO}/blob/main/LICENSE`,
-  ' */',
-  ''
-].join('\n');
-
-const body = files.map(f =>
-  `/* ======== ${f} ======== */\n` + fs.readFileSync(path.join(ROOT, f), 'utf8')
-).join('\n');
-
-const userjs = header + '\n' + body;
-fs.writeFileSync(path.join(DIST, `${NAME}.user.js`), userjs);
-execFileSync(process.execPath, ['--check', path.join(DIST, `${NAME}.user.js`)]);
-console.log(`dist/${NAME}.user.js  (${(userjs.length / 1024).toFixed(0)} Ko, syntaxe vérifiée)`);
-
-/* ---------- 3. on teste ce qu'on vient de produire ---------- */
+/* ---------- on vérifie le zip qu'on vient de produire ---------- */
 try {
-  execFileSync(process.execPath, [path.join(ROOT, 'test', 'dist.test.js')], { stdio: 'pipe' });
-  console.log('ok   test/dist.test.js (artéfact vérifié)');
+  execFileSync(process.execPath, [path.join(ROOT, 'test', 'package.test.js')], { stdio: 'pipe' });
+  console.log('ok   test/package.test.js (paquet vérifié)');
 } catch (e) {
-  console.error('ÉCHEC test/dist.test.js');
+  console.error('ÉCHEC test/package.test.js sur le zip produit');
   console.error(String(e.stdout || '').split('\n').filter(l => /ÉCHEC/.test(l)).join('\n'));
   process.exit(1);
 }
 
 console.log(`\nVersion ${version}. Pour publier :`);
 console.log(`  git tag v${version} && git push origin main --tags`);
-console.log(`  gh release create v${version} dist/* --title "v${version}" --notes "…"`);
+console.log(`  gh release create v${version} dist/*.zip --title "v${version}" --notes "…"`);

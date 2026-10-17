@@ -4,8 +4,8 @@ Guide d'utilisation : [README.md](README.md).
 
 ## Principe
 
-Deux modules, tous deux dans le **monde de la page** (`world: "MAIN"`,
-`document_start`) :
+Extension Chrome MV3, deux content scripts, tous deux dans le **monde de la
+page** (`world: "MAIN"`, `document_start`) :
 
 | Module | Rôle | Sources de données |
 |---|---|---|
@@ -201,10 +201,12 @@ revérifie aussi ces tables face aux sources.
 ## Tests
 
 ```
-node test/hud-mod.test.js        # 47 contrôles : barres de vie et flèches
-node test/stats-mod.test.js      # 71 contrôles : panneau des passifs
+node test/hud-mod.test.js        # barres de vie et flèches
+node test/stats-mod.test.js      # panneau des passifs
+node test/package.test.js        # manifeste, cohabitation, DOM vide, chien de garde, zip
 node tools/verif-signatures.js   # 54 repères, face aux sources du jeu
 ```
+178 contrôles au total, plus les 54 repères.
 
 `test/hud-mod.test.js` implante un faux `CanvasRenderingContext2D` **avec pile
 de transformations** (c'est indispensable : dans un bloc de flèche la matrice
@@ -234,25 +236,51 @@ Ce que les tests **ne** couvrent pas : le rendu réel à l'écran, le cooperatif
 vraie partie à plusieurs, et les effets des objets ramassés en jeu (non comptés
 dans le panneau).
 
-## Construire les paquets
+## L'invariant : le monde de la page
+
+C'est la contrainte dont tout dépend, et celle qui a coûté le plus cher à
+diagnostiquer.
+
+Le mod remplace des méthodes de `CanvasRenderingContext2D.prototype`. Or **un
+monde isolé possède ses propres copies des prototypes natifs**. Exécuté hors du
+monde de la page, le mod patche donc des objets que le jeu n'utilise jamais : il
+ne fait rien, ne lève aucune erreur, et `window.__psx` n'est même pas visible
+depuis la console de la page — puisque ce n'est pas le même `window`.
+
+Trois protections, parce qu'un échec silencieux ne se corrige pas :
+
+1. `manifest.json` déclare `"world": "MAIN"`.
+2. `tools/build.js` **refuse de produire un paquet** si cette déclaration
+   manque, de même pour `document_start`.
+3. Un **chien de garde** dans `hud-mod.js` : si le canvas du jeu existe mais
+   qu'aucun crochet n'a été appelé après 8 s, un avertissement en console dit la
+   cause et quoi vérifier.
+
+Un userscript Tampermonkey (`@grant none` + `@inject-into page`) a été proposé
+jusqu'à la 0.3.2 puis abandonné : Tampermonkey n'obéit pas toujours à
+`@inject-into page`, et depuis Chrome 120 il exige de toute façon le mode
+développeur — donc il ne faisait économiser aucune étape tout en ajoutant cette
+incertitude.
+
+À l'inverse, accrocher les prototypes **tard** n'est pas un problème : les
+méthodes sont résolues à chaque appel, et le jeu redemande une frame à chaque
+tour de boucle. Même installé après le démarrage du jeu, le mod reprend la main
+dès la frame suivante. `document_start` reste préférable, ce n'est pas une
+condition de fonctionnement.
+
+## Construire le paquet
 
 ```
-node tools/build.js      # dist/*.zip (extension) + dist/*.user.js (userscript)
-node test/dist.test.js   # 34 contrôles sur l'artéfact produit
+node tools/build.js        # vérifie, puis produit dist/*.zip, puis revérifie le zip
+node test/package.test.js  # manifeste, cohabitation des modules, DOM vide, chien de garde, zip
 ```
 
-Le userscript est la concaténation des deux modules, dans l'ordre du manifeste,
-précédée du bloc de métadonnées. C'est possible parce que les deux sont des IIFE
-sans dépendance conçues pour le monde de la page : `@grant none` les y place.
 Rien n'est minifié — ce qu'on publie reste lisible, ce qui est la moindre des
-choses pour du code qu'on installe dans son navigateur.
+choses pour du code qu'on installe dans son navigateur. Le zip n'est pas
+versionné : il est fabriqué à la demande et attaché aux releases. Cloner le
+dépôt suffit d'ailleurs à charger l'extension, le manifeste étant à la racine.
 
-`test/dist.test.js` exécute le userscript produit dans un faux navigateur et
-vérifie que les deux modules cohabitent : ils enveloppent les mêmes méthodes de
-canvas et le même `requestAnimationFrame`, et partagent `window.__psx`.
-
-Note : accrocher les prototypes tard n'est pas un problème. Les méthodes sont
-résolues sur `CanvasRenderingContext2D.prototype` à chaque appel, et le jeu
-redemande une frame à chaque tour de boucle — donc même installé après le
-démarrage du jeu, le mod reprend la main dès la frame suivante. `document-start`
-reste préférable, mais ce n'est pas une condition de fonctionnement.
+`test/package.test.js` concatène les deux content scripts dans l'ordre du
+manifeste — ce que Chrome fait, dans le même monde — et vérifie qu'ils
+cohabitent : ils enveloppent les mêmes méthodes de canvas et le même
+`requestAnimationFrame`, et partagent `window.__psx`.
