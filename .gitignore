@@ -1,0 +1,4 @@
+# Le zip vit dans les releases GitHub, pas dans le dépôt.
+dist/*.zip
+.DS_Store
+node_modules/

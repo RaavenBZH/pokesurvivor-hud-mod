@@ -1,0 +1,28 @@
+# Pousser un tag vX.Y.Z fabrique les paquets et crée la release GitHub.
+#   git tag v0.3.0 && git push origin v0.3.0
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # build.js lance les tests et refuse de produire un paquet s'ils échouent.
+      - run: node tools/build.js
+        env:
+          PSX_REPO: ${{ github.repository }}
+      # Le userscript est versionné dans le dépôt : c'est l'URL que
+      # Tampermonkey interroge pour les mises à jour automatiques.
+      - name: Vérifier que dist/*.user.js est à jour dans le dépôt
+        run: git diff --exit-code -- dist/ || (echo "::error::dist/ n'est pas à jour : lance 'node tools/build.js' et commite dist/" && exit 1)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "PokéSurvivor HUD mod (non officiel)",
+  "version": "0.3.0",
+  "description": "Barres de vie repositionnées, alerte de vie basse, flèches de repérage autour du joueur et panneau des passifs. Mod non officiel, non commercial.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pokesurvivor.com/*",
+        "https://www.pokesurvivor.com/*",
+        "http://localhost:8000/*"
+      ],
+      "js": [
+        "src/ui/hud-mod.js",
+        "src/ui/stats-mod.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    }
+  ]
+}

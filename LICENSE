@@ -1,0 +1,51 @@
+Required Notice: Copyright 2026 JPTER78 (https://github.com/JPTER78/pokesurvivor)
+
+PokéSurvivor HUD mod — licence
+==============================
+
+Ce projet est une œuvre dérivée de PokéSurvivor (https://github.com/JPTER78/pokesurvivor),
+publié par JPTER78 sous PolyForm Noncommercial License 1.0.0.
+
+Il en reprend notamment :
+  - les coordonnées et les séquences de dessin de son interface, pour les
+    reconnaître à l'écran (src/ui/hud-mod.js) ;
+  - ses tables d'équilibrage des améliorations et des cartes de niveau, pour
+    recalculer des valeurs que le jeu n'affiche pas (src/ui/stats-mod.js) ;
+  - des extraits de ses routines de dessin, transcrits pour les tests
+    (test/hud-mod.test.js).
+
+Ce mod est donc distribué sous les MÊMES termes :
+
+    PolyForm Noncommercial License 1.0.0
+    https://polyformproject.org/licenses/noncommercial/1.0.0
+    Texte complet dans LICENSE-NONCOMMERCIAL.md
+
+Ce que cela veut dire, en pratique :
+
+  AUTORISÉ      utiliser, étudier, modifier et redistribuer ce mod, pour tout
+                usage non commercial (usage personnel, loisir, étude).
+
+  INTERDIT      tout usage commercial : le vendre, le faire payer, y mettre de
+                la publicité, le monétiser de quelque façon, ou l'inclure dans
+                une offre payante.
+
+  OBLIGATOIRE   si vous redistribuez ce mod ou une partie de ce mod, celui qui
+                en reçoit une copie doit recevoir aussi ces termes (ou leur
+                URL) et la ligne « Required Notice » ci-dessus.
+
+Les ajouts propres à ce mod (architecture, interception du canvas, panneau des
+passifs, tests, outillage) sont Copyright 2026 RaavenBZH, et sont couverts par
+la même licence : ils ne peuvent pas être distribués sous des termes plus
+permissifs que ceux de l'œuvre dont ils dérivent.
+
+Mentions
+--------
+
+Ce mod n'est PAS officiel et n'est affilié ni à l'auteur de PokéSurvivor, ni à
+Nintendo, Creatures ou GAME FREAK. La seule adresse officielle du jeu est
+https://pokesurvivor.com.
+
+PokéSurvivor est un projet de fan sans but lucratif. Pokémon est une marque de
+Nintendo / Creatures / GAME FREAK. Ce mod ne contient aucun sprite, aucune
+image, aucun son ni aucune autre ressource du jeu ou de Nintendo : uniquement
+du code.
