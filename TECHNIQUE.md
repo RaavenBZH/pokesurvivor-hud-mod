@@ -268,6 +268,21 @@ tour de boucle. Même installé après le démarrage du jeu, le mod reprend la m
 dès la frame suivante. `document_start` reste préférable, ce n'est pas une
 condition de fonctionnement.
 
+## Aucune dépendance
+
+Rien à installer : pas de `npm install`, pas de `package.json`, pas de
+`node_modules`, aucune étape de compilation. Le mod est du JavaScript que Chrome
+lit tel quel, et l'outillage n'utilise que `fs`, `path` et `child_process`,
+natifs à Node.
+
+Seule exigence hors Node : le binaire système `zip`, et uniquement pour publier.
+`unzip` sert aux tests à inspecter le paquet, et son absence est signalée au
+lieu de faire échouer la suite. Utiliser le mod ne demande que le navigateur.
+
+C'est un choix, pas un hasard : un mod qu'on installe à la main dans son
+navigateur doit pouvoir être lu, vérifié et chargé sans chaîne de construction
+à faire tourner d'abord.
+
 ## Construire le paquet
 
 ```

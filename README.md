@@ -19,6 +19,11 @@ Détails techniques : [TECHNIQUE.md](TECHNIQUE.md).
 
 ## 1. Installer
 
+**Rien à installer d'autre que le navigateur.** Pas de `npm install`, pas de
+`package.json`, pas de dépendance, aucune étape de compilation : le mod est du
+JavaScript que Chrome lit directement. Node.js ne sert qu'à lancer les tests si
+tu touches au code (§5).
+
 Chrome, Edge, Brave, Opera — tout navigateur basé sur Chromium.
 
 **1.** Récupère le mod, au choix :
@@ -291,7 +296,32 @@ jour-là.
 
 ---
 
-## 5. En cas de problème
+## 5. Modifier le code
+
+Toujours aucune installation. Il faut seulement **Node.js** (n'importe quelle
+version récente) pour lancer les tests :
+
+```
+node test/hud-mod.test.js      # barres de vie et flèches
+node test/stats-mod.test.js    # panneau des passifs
+node test/package.test.js      # manifeste, cohabitation des modules, zip
+```
+
+Et, pour fabriquer le zip d'une release :
+
+```
+node tools/build.js            # vérifie le manifeste, lance tout, empaquette
+```
+
+Les scripts n'utilisent que `fs`, `path` et `child_process`, natifs à Node. La
+seule exigence hors Node est le binaire système **`zip`** (fourni avec macOS et
+Linux), et uniquement pour publier — jamais pour utiliser le mod. `unzip` sert
+à inspecter le paquet dans les tests, et son absence est simplement signalée.
+
+Pour contrôler que le mod est toujours aligné sur le jeu, il faut en plus un
+clone du jeu — voir §4c.
+
+## 6. En cas de problème
 
 | Symptôme | Cause probable | Quoi faire |
 |---|---|---|
@@ -315,7 +345,7 @@ le jeu d'origine.
 
 ---
 
-## 6. Limites assumées
+## 7. Limites assumées
 
 - **Centre de l'anneau** = centre de la caméra, pas la position exacte du
   sprite. Le jeu amortit la caméra vers le joueur, donc ton Pokémon s'en écarte
@@ -338,7 +368,7 @@ le jeu d'origine.
 
 ---
 
-## 7. Licence et limites d'usage
+## 8. Licence et limites d'usage
 
 Ce mod est une **œuvre dérivée** de PokéSurvivor : il reprend les coordonnées de
 son interface et ses tables d'équilibrage. Il est donc distribué sous la même
@@ -355,7 +385,7 @@ Ce mod ne contient **aucune ressource** du jeu ni de Nintendo : uniquement du
 code. Il ne joue pas à ta place, n'automatise rien et n'écrit rien sur les
 serveurs du jeu — en particulier, il ne touche pas au classement.
 
-## 8. Signaler un problème
+## 9. Signaler un problème
 
 [Ouvrir une issue](../../issues). Précise la version du mod, le format
 (userscript ou extension), ton navigateur, et ce que dit la console (`F12`).

@@ -13,6 +13,10 @@
  * l'extension : le manifeste est à la racine.
  *
  * On refuse de produire un paquet dont les tests échouent.
+ *
+ * Aucune dépendance : rien à installer, pas de npm, pas de package.json. Seuls
+ * fs / path / child_process, natifs à Node. Le binaire système `zip` est la
+ * seule exigence hors Node, et uniquement pour publier.
  */
 'use strict';
 const fs = require('fs');
@@ -65,9 +69,17 @@ fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });
 
 const zipName = `${NAME}-${version}.zip`;
-execFileSync('zip', ['-r', '-q', path.join(DIST, zipName),
-  'manifest.json', 'src', 'README.md', 'TECHNIQUE.md', 'LICENSE', 'LICENSE-NONCOMMERCIAL.md'],
-  { cwd: ROOT });
+try {
+  execFileSync('zip', ['-r', '-q', path.join(DIST, zipName),
+    'manifest.json', 'src', 'README.md', 'TECHNIQUE.md', 'LICENSE', 'LICENSE-NONCOMMERCIAL.md'],
+    { cwd: ROOT });
+} catch (e) {
+  // Seule dépendance hors Node de tout le projet, et elle ne sert qu'à publier.
+  console.error('\nLe binaire `zip` est introuvable (il est fourni avec macOS et Linux).');
+  console.error('Rien d’autre ne le remplace ici, mais il n’est utile que pour PUBLIER :');
+  console.error('pour utiliser le mod, il suffit de charger ce dossier dans chrome://extensions.');
+  process.exit(1);
+}
 const ko = (fs.statSync(path.join(DIST, zipName)).size / 1024).toFixed(0);
 console.log(`\ndist/${zipName}  (${ko} Ko)`);
 

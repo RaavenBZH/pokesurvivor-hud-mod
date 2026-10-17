@@ -1,4 +1,3 @@
 # Le zip est fabriqué à la demande et vit dans les releases GitHub.
 dist/
 .DS_Store
-node_modules/
