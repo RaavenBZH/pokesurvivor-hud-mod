@@ -17,49 +17,53 @@ Détails techniques : [TECHNIQUE.md](TECHNIQUE.md).
 
 ---
 
-## 1. Installer
+## 1. Installer — 2 clics, sans git ni terminal
 
-Deux formats. Le premier s'installe en un clic et se met à jour tout seul : si
-tu n'as pas de préférence, prends celui-là.
+**1.** Installe [**Tampermonkey**](https://www.tampermonkey.net/) depuis le
+Chrome Web Store (gratuit, une seule fois, c'est le gestionnaire de mods du
+navigateur).
 
-### A. Userscript — recommandé
+**2.** Clique ici :
 
-Il faut une extension de userscripts, une fois pour toutes :
-[Tampermonkey](https://www.tampermonkey.net/) ou
-[Violentmonkey](https://violentmonkey.github.io/) (gratuites, sur le Chrome Web
-Store).
+### [→ INSTALLER LE MOD](../../raw/main/dist/pokesurvivor-hud-mod.user.js)
 
-Ensuite, **un clic** :
+Tampermonkey ouvre une page de confirmation, tu cliques sur **Installer**.
+C'est fini — ouvre https://pokesurvivor.com et lance une partie.
 
-**[→ Installer le mod](../../raw/main/dist/pokesurvivor-hud-mod.user.js)**
+Les mises à jour arrivent ensuite **automatiquement**. Rien à refaire.
 
-Tampermonkey ouvre une page de confirmation, tu valides, c'est fini. Les mises
-à jour arrivent ensuite automatiquement.
+> Ça marche aussi avec [Violentmonkey](https://violentmonkey.github.io/), et sur
+> Firefox, Edge ou Opera avec la même extension.
 
-### B. Extension Chrome — le zip
-
-À réserver à ceux qui ne veulent pas de Tampermonkey. **Ce n'est pas du
-plug-and-play** : Chrome n'autorise l'installation en un clic que depuis son
-Web Store.
-
-1. Télécharge le `.zip` de la [dernière version](../../releases/latest).
-2. Dézippe-le où tu veux (le dossier doit rester là : Chrome le lit à chaque
-   démarrage).
-3. `chrome://extensions` → active **« Mode développeur »** en haut à droite.
-4. **« Charger l'extension non empaquetée »** → choisis le dossier dézippé
-   (celui qui contient `manifest.json`).
-
-Deux inconvénients à connaître : Chrome affiche un bandeau
-« Désactiver les extensions en mode développeur » à chaque démarrage, et les
-mises à jour sont à refaire à la main.
+**Pour désinstaller** : icône Tampermonkey → *Tableau de bord* → la corbeille à
+côté du mod. Ou simplement l'interrupteur pour le désactiver sans le supprimer.
 
 ### Vérifier que c'est chargé
-`F12` → onglet Console. Au chargement de la page du jeu, tu dois voir :
+En jeu, `F12` → onglet Console. Tu dois voir :
 
 ```
 [psx] hud-mod installé — barres de vie en bas au centre
 [psx] stats-mod installé — panneau des passifs (F2 pour masquer)
 ```
+
+<details>
+<summary><b>Autre méthode : extension Chrome (zip)</b> — si tu ne veux pas de Tampermonkey</summary>
+
+Ce n'est **pas** du plug-and-play : Chrome n'autorise l'installation en un clic
+que depuis son Web Store, et un `.crx` hors Store est bloqué.
+
+1. Télécharge le `.zip` de la [dernière version](../../releases/latest).
+2. Dézippe-le où tu veux — le dossier doit **rester** là, Chrome le relit à
+   chaque démarrage.
+3. `chrome://extensions` → active **« Mode développeur »** (en haut à droite).
+4. **« Charger l'extension non empaquetée »** → choisis le dossier dézippé
+   (celui qui contient `manifest.json`).
+
+Deux inconvénients : Chrome affiche un bandeau « Désactiver les extensions en
+mode développeur » à chaque démarrage, et les mises à jour sont à refaire à la
+main. C'est pour ça que le userscript est recommandé.
+
+</details>
 
 ---
 
@@ -221,7 +225,13 @@ nouvelle sort (parfois en coupant la partie en cours, si l'auteur l'a marquée
 obligatoire). **Tu n'as rien à faire** : les extensions Chrome se réinjectent à
 chaque chargement de page, donc le mod revient tout seul.
 
-### c) Quand le jeu change son HUD (le seul vrai cas de maintenance)
+### c) Quand le jeu change son HUD
+
+> Cette partie ne concerne que **la maintenance du mod** : elle demande un
+> clone du jeu et un terminal. En simple utilisateur, tu n'as rien à faire —
+> au pire le mod se met en retrait tout seul, et une version corrigée arrivera
+> par la mise à jour automatique. Tu peux [ouvrir une issue](../../issues) pour
+> le signaler.
 
 L'extension reconnaît les éléments du HUD à leurs **coordonnées exactes**, qui
 sont des constantes du code du jeu. Si l'auteur refond son HUD, ces repères
