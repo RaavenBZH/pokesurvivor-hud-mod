@@ -34,7 +34,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.4.0';
+  const VERSION = '0.5.0';
 
   const CFG = {
     lowHp: 0.20,          // seuil du contour rouge
@@ -50,9 +50,32 @@
     lead: 420             // correction de relèvement (voir relocate())
   };
 
-  /* -- signatures du HUD d'origine -- */
-  const MY = { x: 64, y: 37, w: 168, h: 11, textX: 148, textY: 46 };
-  const ALLY = { x: 94, w: 110, h: 8, nameX: 16, deadX: 210, yMin: 58, yMax: 160 };
+  /* -- signatures du HUD d'origine --
+   *
+   * On ne code PLUS de position absolue. Depuis le 18-10-2026 le jeu décale son
+   * bloc de vie de la zone sûre de l'écran (`px = 16 + sa.left, py = 20 + sa.top`,
+   * pour l'encoche de l'iPhone) : des coordonnées en dur seraient justes sur un
+   * écran d'ordinateur et fausses sur un téléphone.
+   *
+   * À la place on reconnaît MA barre à sa TAILLE — 168 × 11, dessinée par
+   * `bar(ctx, px+48, py+17, 168, 11, …)` — et tout le reste se déduit en
+   * relatif de son coin haut-gauche. Les décalages internes du bloc, eux, n'ont
+   * pas bougé.
+   */
+  const MY = { w: 168, h: 11 };
+  const ALLY = { w: 110, h: 8 };
+  // Décalages depuis le coin haut-gauche de ma barre, soit (px+48, py+17) :
+  const REL = {
+    textX: 84, textY: 9,          // mes chiffres   : (px+132, py+26)
+    allyX: 30,                     // barre alliée   : px+78
+    allyNameX: -48,                // nom de l'allié : px
+    allyDeadX: 146,                // « tombé »      : px+78+116
+    allyYMin: 18, allyYMax: 135    // bande du bloc coop, sous ma barre
+  };
+  // Là où la barre peut raisonnablement se trouver : en haut à gauche. Évite
+  // qu'un autre dessin de 168 × 11 ailleurs ne soit pris pour elle.
+  const MY_ZONE = { maxX: 0.45, maxY: 220 };   // maxX en fraction de la largeur
+  let anchor = null;               // coin haut-gauche de ma barre, cette frame
   const SLOT = 54;
   // Le jeu écrit le nom du mouvement ACTIF au-dessus de sa case
   // (`fillText(m.name, x + S/2, y - 7)`, police 10 px), et cette case est
@@ -276,6 +299,7 @@
       allies = [];
       bb = null;
       pend = null;
+      anchor = null;             // redécouverte à chaque frame
     }
   }, O.clearRect);
 
@@ -296,15 +320,18 @@
     if (!screenPass(this)) return;
 
     // fond de MA barre de vie → supprimé, et on note sa présence.
-    if (boxIs(MY.x, MY.y, MY.w, MY.h)) {
+    if (near(bb.x1 - bb.x0, MY.w) && near(bb.y1 - bb.y0, MY.h)
+        && bb.x0 < this.canvas.clientWidth * MY_ZONE.maxX && bb.y0 < MY_ZONE.maxY) {
+      anchor = { x: bb.x0, y: bb.y0 };
       me.sawBar = performance.now();
       me.frac = 0;                      // écrasé juste après par le fillRect de remplissage
       return true;
     }
 
     // fond d'une barre alliée (110 × 8 à x = 94) → supprimé, et on arme le coop.
-    if (near(bb.x0, ALLY.x) && near(bb.x1 - bb.x0, ALLY.w) && near(bb.y1 - bb.y0, ALLY.h)
-        && bb.y0 >= ALLY.yMin - 4 && bb.y0 <= ALLY.yMax) {
+    if (anchor && near(bb.x0, anchor.x + REL.allyX) && near(bb.x1 - bb.x0, ALLY.w)
+        && near(bb.y1 - bb.y0, ALLY.h)
+        && bb.y0 >= anchor.y + REL.allyYMin && bb.y0 <= anchor.y + REL.allyYMax) {
       coopSeen = performance.now();
       const a = allies[allies.length - 1];
       if (a && a.frac == null) a.frac = 0;
@@ -331,7 +358,7 @@
     const x = args[0], y = args[1], w = args[2], h = args[3];
 
     // remplissage de MA barre : la largeur donne la fraction, au pixel près.
-    if (near(x, MY.x) && near(y, MY.y) && near(h, MY.h) && w <= MY.w + 2) {
+    if (anchor && near(x, anchor.x) && near(y, anchor.y) && near(h, MY.h) && w <= MY.w + 2) {
       me.frac = clamp(w / MY.w, 0, 1);
       me.seen = performance.now();
       return true;
@@ -340,8 +367,8 @@
     // remplissage d'une barre alliée. On supprime même si le nom n'a pas encore
     // été capté (première frame du coop) : sinon un morceau de barre reste
     // affiché tout seul, sans son fond.
-    if (coopActive() && near(x, ALLY.x) && near(h, ALLY.h) && w <= ALLY.w + 2
-        && y >= ALLY.yMin - 4 && y <= ALLY.yMax) {
+    if (coopActive() && anchor && near(x, anchor.x + REL.allyX) && near(h, ALLY.h)
+        && w <= ALLY.w + 2 && y >= anchor.y + REL.allyYMin && y <= anchor.y + REL.allyYMax) {
       const a = allies[allies.length - 1];
       if (a) { a.frac = clamp(w / ALLY.w, 0, 1); a.color = String(this.fillStyle); }
       return true;
@@ -355,7 +382,7 @@
     if (typeof text !== 'string') return;
 
     // mes chiffres "123 / 456" : relus puis supprimés.
-    if (near(x, MY.textX) && near(y, MY.textY)) {
+    if (anchor && near(x, anchor.x + REL.textX) && near(y, anchor.y + REL.textY)) {
       const m = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(text);
       if (m) { me.hp = +m[1]; me.max = +m[2]; me.seen = performance.now(); }
       return true;
@@ -366,12 +393,14 @@
     // nom d'un allié : aligné à gauche, exactement à x = 16, dans la bande coop.
     // (Les pastilles de buff sont à x = 22 et la ligne de biome est centrée :
     //  aucune collision possible.)
-    if (near(x, ALLY.nameX, 0.6) && y >= ALLY.yMin && y <= ALLY.yMax && this.textAlign === 'left') {
+    if (anchor && near(x, anchor.x + REL.allyNameX, 0.6)
+        && y >= anchor.y + REL.allyYMin && y <= anchor.y + REL.allyYMax && this.textAlign === 'left') {
       allies.push({ name: text, color: String(this.fillStyle), frac: null, dead: false });
       return true;
     }
     // "CAÍDO"
-    if (near(x, ALLY.deadX) && y >= ALLY.yMin && y <= ALLY.yMax) {
+    if (anchor && near(x, anchor.x + REL.allyDeadX)
+        && y >= anchor.y + REL.allyYMin && y <= anchor.y + REL.allyYMax) {
       const a = allies[allies.length - 1];
       if (a) a.dead = true;
       return true;

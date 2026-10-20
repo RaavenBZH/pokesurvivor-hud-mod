@@ -51,12 +51,12 @@ partie.
 En jeu, `F12` → onglet Console :
 
 ```
-[psx] hud-mod 0.4.0 installé — barres de vie en bas au centre
-[psx] stats-mod 0.4.0 installé — panneau des passifs (F2 pour masquer)
+[psx] hud-mod 0.5.0 installé — barres de vie en bas au centre
+[psx] stats-mod 0.5.0 installé — panneau des passifs (F2 pour masquer)
 ```
 
 Ou tape `__psx` dans la console : tu dois voir
-`{painting: false, hud: "0.4.0", stats: "0.4.0"}`.
+`{painting: false, hud: "0.5.0", stats: "0.5.0"}`.
 
 | Console | Cause | Remède |
 |---|---|---|
@@ -69,7 +69,7 @@ Ou tape `__psx` dans la console : tu dois voir
 > pas de façon fiable. Joue dans un onglet.
 
 ### Note sur Tampermonkey
-Les versions ≤ 0.3.2 proposaient aussi un userscript. **Abandonné en 0.4.0** :
+Les versions ≤ 0.3.2 proposaient aussi un userscript. **Abandonné en 0.5.0** :
 depuis Chrome 120, Tampermonkey exige de toute façon le mode développeur, et il
 n'obéit pas toujours à `@inject-into page` — or ce mod n'a aucun sens hors du
 monde de la page. L'extension ne coûte donc pas plus cher et ne laisse aucune

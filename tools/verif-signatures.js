@@ -51,8 +51,12 @@ const grab = (src, re, what) => {
 };
 let missing = [];
 
-/* ---------- ce que dit le jeu ---------- */
-const pxpy = grab(hud, /const px = (\d+), py = (\d+);/, 'px / py du bloc de vie');
+/* ---------- ce que dit le jeu ----------
+ * On compare des DÉCALAGES, pas des positions absolues : depuis le 18-10-2026
+ * le jeu ajoute la zone sûre de l'écran à l'origine de son bloc de vie
+ * (`const px = 16 + sa.left, py = 20 + sa.top;`). Le mod repère donc la barre à
+ * sa taille et déduit le reste en relatif — ce sont ces relatifs qu'on vérifie.
+ */
 const myBar = grab(hud, /bar\(ctx, px \+ (\d+), py \+ (\d+), (\d+), (\d+), pl\.hp/, 'barre de vie du joueur');
 const myTxt = grab(hud, /fillText\(Math\.ceil\(pl\.hp\)[^,]*,\s*px \+ (\d+) \+ (\d+), py \+ (\d+)\)/, 'chiffres de vie');
 const allyX = grab(hud, /const lx = px \+ (\d+);/, 'décalage des barres alliées');
@@ -60,20 +64,20 @@ const allyBar = grab(hud, /bar\(ctx, lx, y \+ 1, (\d+), (\d+),/, 'barre de vie a
 const allyDead = grab(hud, /fillText\('CA[ÍI]DO', lx \+ (\d+),/, 'étiquette « tombé »');
 const slot = grab(hud, /const S = (\d+), GAP = (\d+);/, 'taille des cases d’attaque');
 
-const px = pxpy ? +pxpy[1] : NaN, py = pxpy ? +pxpy[2] : NaN;
+// Coin haut-gauche de ma barre, dans le repère du bloc : (px+bx0, py+by0).
+const bx0 = myBar && +myBar[1], by0 = myBar && +myBar[2];
 
 const game = {
-  'MY.x': myBar && px + +myBar[1],
-  'MY.y': myBar && py + +myBar[2],
   'MY.w': myBar && +myBar[3],
   'MY.h': myBar && +myBar[4],
-  'MY.textX': myTxt && px + +myTxt[1] + +myTxt[2],
-  'MY.textY': myTxt && py + +myTxt[3],
-  'ALLY.x': allyX && px + +allyX[1],
+  // relatifs au coin de la barre
+  'REL.textX': myTxt && (+myTxt[1] + +myTxt[2] - bx0),
+  'REL.textY': myTxt && (+myTxt[3] - by0),
+  'REL.allyX': allyX && (+allyX[1] - bx0),
+  'REL.allyNameX': myBar && -bx0,
+  'REL.allyDeadX': allyX && allyDead && (+allyX[1] + +allyDead[1] - bx0),
   'ALLY.w': allyBar && +allyBar[1],
   'ALLY.h': allyBar && +allyBar[2],
-  'ALLY.nameX': px,
-  'ALLY.deadX': allyX && allyDead && px + +allyX[1] + +allyDead[1],
   'SLOT': slot && +slot[1]
 };
 
@@ -112,20 +116,21 @@ const lit = (name, re) => {
 };
 const MY = lit('MY', /const MY = (\{[^}]*\});/);
 const ALLY = lit('ALLY', /const ALLY = (\{[^}]*\});/);
+const REL = lit('REL', /const REL = (\{[\s\S]*?\n  \});/);
 const SLOT = lit('SLOT', /const SLOT = (\d+);/);
 const ARROWS = lit('ARROWS', /const ARROWS = (\[[\s\S]*?\]);/);
 
 const ext = {
-  'MY.x': MY.x, 'MY.y': MY.y, 'MY.w': MY.w, 'MY.h': MY.h,
-  'MY.textX': MY.textX, 'MY.textY': MY.textY,
-  'ALLY.x': ALLY.x, 'ALLY.w': ALLY.w, 'ALLY.h': ALLY.h,
-  'ALLY.nameX': ALLY.nameX, 'ALLY.deadX': ALLY.deadX,
+  'MY.w': MY.w, 'MY.h': MY.h,
+  'REL.textX': REL.textX, 'REL.textY': REL.textY,
+  'REL.allyX': REL.allyX, 'REL.allyNameX': REL.allyNameX, 'REL.allyDeadX': REL.allyDeadX,
+  'ALLY.w': ALLY.w, 'ALLY.h': ALLY.h,
   'SLOT': SLOT
 };
 
 /* ---------- comparaison ---------- */
 let bad = 0;
-console.log('\nConstantes du HUD');
+console.log('\nHUD : tailles et décalages relatifs');
 for (const k of Object.keys(game)) {
   const g = game[k], e = ext[k];
   const ok = g != null && g === e;
@@ -212,7 +217,7 @@ if (bad === 0) {
   process.exit(0);
 }
 console.log(`\n${bad} écart(s). À corriger dans l’extension :`);
-console.log('  - src/ui/hud-mod.js : constantes MY / ALLY / SLOT (section « signatures »)');
+console.log('  - src/ui/hud-mod.js : MY / ALLY / REL / SLOT (section « signatures »)');
 console.log('  - src/ui/hud-mod.js : tableau ARROWS pour les flèches');
 console.log('  - src/ui/stats-mod.js : tables SHOP / RUN pour les passifs');
 console.log('Puis : node test/hud-mod.test.js, et relance une partie pour vérifier à l’œil.\n');

@@ -34,10 +34,18 @@ function el(id, { hidden = false, html = '' } = {}) {
 }
 
 let cardEls = [];
+const SCR_IDS = ['scr-login', 'scr-test', 'scr-result', 'scr-starters', 'scr-menu', 'scr-dex',
+  'scr-upgrades', 'scr-gacha', 'scr-levelup', 'scr-pause', 'scr-over', 'scr-nick', 'scr-friends',
+  'scr-lobby', 'scr-rank', 'scr-item', 'scr-goals', 'scr-bond', 'scr-mod', 'scr-settings'];
 const document_ = {
   documentElement: {},
   getElementById: id => nodes[id] || null,
-  querySelectorAll: sel => (sel === '#cards .card' ? cardEls : []),
+  querySelectorAll: sel => {
+    if (sel === '#cards .card') return cardEls;
+    // section.scr : tous les écrans déclarés dans le faux DOM
+    if (sel === 'section.scr') return SCR_IDS.map(id => nodes[id]).filter(Boolean);
+    return [];
+  },
   addEventListener: () => {}
 };
 
@@ -53,18 +61,21 @@ new Function('window', 'document', 'localStorage', 'MutationObserver', 'performa
   (global.window, document_, localStorage, global.MutationObserver, global.performance, global.module, console);
 const M = global.module.exports;
 
-/* ---------- fabrique de cartes, comme run-ui.js:renderCards ----------
- *   <div class="card"><div class="nm">TITRE <span class="tag-chip">TAG</span></div>
- *                     <div class="ds">DESC</div></div>
+/* ---------- fabrique de cartes, fidèle à run-ui.js:renderCards ----------
+ *   <div class="card">
+ *     <div class="nm">TITRE <span class="tag-chip">TAG</span></div>
+ *     <div class="ds">DESCRIPTION</div>
+ *     <div class="key">1</div>
+ *   </div>
  */
 function card(title, tag, desc) {
+  const chip = { nodeType: 1, className: 'tag-chip', textContent: tag };
   const nm = {
-    childNodes: [
-      { nodeType: 3, textContent: title + ' ' },
-      { nodeType: 1, textContent: tag }        // <span class="tag-chip">
-    ]
+    childNodes: [{ nodeType: 3, textContent: title + ' ' }, chip],
+    querySelector: sel => (sel === '.tag-chip' ? chip : null)
   };
-  return { querySelector: sel => (sel === '.nm' ? nm : sel === '.ds' ? { textContent: desc } : null) };
+  const ds = { textContent: desc };
+  return { querySelector: sel => (sel === '.nm' ? nm : sel === '.ds' ? ds : null) };
 }
 
 let fails = 0;
@@ -104,6 +115,79 @@ for (const id in en) {
   const s = M.statOf(en[id]);
   check('EN ' + id, s && s.id === id, s ? 'reconnu ' + s.id : 'non reconnu');
 }
+
+
+/* ================= les 7 langues du jeu =================
+ * Les descriptions sont reprises TELLES QUELLES de js/lang/ et js/data/lang-en.js
+ * (relevées le 20-10-2026). Chacune doit correspondre à une seule ligne : si une
+ * langue cassait la reconnaissance, le panneau ne compterait rien — en silence.
+ */
+console.log('\n--- identification dans les 7 langues ---');
+const LANGUES = {
+  es: { hp: '+20 de vida máxima (y la recupera).', atk: '+10% de daño con todos los movimientos.',
+        spd: '+7% de velocidad de movimiento.', cd: '-8% de recarga en todos los movimientos.',
+        def: '+6% de reducción de daño recibido.', rgn: '+0.9 de vida regenerada por segundo.',
+        mag: '+30% de radio de recogida de experiencia.', xp: '+12% de experiencia ganada.' },
+  en: { hp: '+20 max HP (and heals it).', atk: '+10% damage with every move.',
+        spd: '+7% movement speed.', cd: '-8% cooldown on every move.',
+        def: '+6% damage reduction.', rgn: '+0.9 HP regenerated per second.',
+        mag: '+30% experience pickup radius.', xp: '+12% experience gained.' },
+  // le français : espace avant « % », et virgule décimale
+  fr: { hp: '+20 PV max (et les récupère).', atk: '+10 % de dégâts avec toutes les capacités.',
+        spd: '+7 % de vitesse de déplacement.', cd: '-8 % de recharge sur toutes les capacités.',
+        def: '+6 % de réduction des dégâts subis.', rgn: '+0,9 PV régénéré par seconde.',
+        mag: "+30 % de rayon de ramassage de l'expérience.", xp: "+12 % d'expérience gagnée." },
+  it: { hp: '+20 PS massimi (e li ripristina).', atk: '+10% di danno con ogni mossa.',
+        spd: '+7% di velocità di movimento.', cd: '-8% di ricarica su ogni mossa.',
+        def: '+6% di riduzione dei danni subiti.', rgn: '+0.9 PS rigenerati al secondo.',
+        mag: '+30% di raggio di raccolta esperienza.', xp: '+12% di esperienza guadagnata.' },
+  'pt-BR': { hp: '+20 de vida máxima (e recupera essa vida).', atk: '+10% de dano com todos os golpes.',
+        spd: '+7% de velocidade de movimento.', cd: '-8% de recarga em todos os golpes.',
+        def: '+6% de redução de dano recebido.', rgn: '+0.9 de vida regenerada por segundo.',
+        mag: '+30% de raio de coleta de experiência.', xp: '+12% de experiência ganha.' },
+  // le chinois : pas de « + » pour l'armure ni la régénération
+  'zh-Hans': { hp: '最大生命值 +20，并恢复等量生命值。', atk: '所有招式伤害 +10%。',
+        spd: '移动速度 +7%。', cd: '所有招式冷却时间 -8%。',
+        def: '受到的伤害减少 6%。', rgn: '每秒恢复 0.9 生命值。',
+        mag: '经验拾取半径 +30%。', xp: '获得的经验 +12%。' },
+  'zh-Hant': { hp: '最大生命值 +20，並恢復等量生命值。', atk: '所有招式傷害 +10%。',
+        spd: '移動速度 +7%。', cd: '所有招式冷卻時間 -8%。',
+        def: '受到的傷害減少 6%。', rgn: '每秒恢復 0.9 生命值。',
+        mag: '經驗拾取半徑 +30%。', xp: '獲得的經驗 +12%。' }
+};
+
+for (const [lang, descs] of Object.entries(LANGUES)) {
+  let bad = [];
+  for (const [id, ds] of Object.entries(descs)) {
+    // titre volontairement inconnu : on teste la reconnaissance par le NOMBRE seul
+    const s = M.statOf(card('Titre Inconnu', 'Amélioration', ds));
+    if (!s || s.id !== id) bad.push(id + (s ? '→' + s.id : '→rien'));
+  }
+  check(lang.padEnd(8) + ' les 8 passifs reconnus sans le titre', bad.length === 0, bad.join(' '));
+}
+
+console.log('\n--- aucune ambiguïté entre les 8 lignes ---');
+for (const [lang, descs] of Object.entries(LANGUES)) {
+  const multi = [];
+  for (const [id, ds] of Object.entries(descs)) {
+    const n = M.RUN.filter(s => s.num.test(ds)).length;
+    if (n !== 1) multi.push(id + ' correspond à ' + n + ' lignes');
+  }
+  check(lang.padEnd(8) + ' chaque description ne vise qu’une ligne', multi.length === 0, multi.join(' · '));
+}
+
+console.log('\n--- rejets structurels, valables dans toutes les langues ---');
+check('amélioration de mouvement rejetée par son étiquette « 2 > 3 »',
+  M.statOf(card('Flammèche', 'Niv.2 > 3', '+10 % de dégâts de cette capacité.')) === null);
+check('idem en chinois',
+  M.statOf(card('火花', '等级 2 > 3', '这个招式伤害 +10%。')) === null);
+check('évolution rejetée par le « → » du titre',
+  M.statOf(card('Flammèche → Lance-Flammes', 'ÉVOLUTION', '+30 % de dégâts et plus de portée.')) === null);
+check('description ambiguë → rien plutôt que n’importe quoi',
+  M.statOf(card('Truc', 'Amélioration', '+10% et +30% et +12%')) === null);
+check('carte sans description ignorée',
+  M.statOf(card('Truc', 'Amélioration', '')) === null);
+
 
 console.log('\n--- cartes qui ne sont PAS des passifs ---');
 check('soin instantané (Baya Zidra) ignoré',
@@ -310,6 +394,20 @@ nodes['scr-gacha']._hidden = true;
 nodes['boot']._hidden = false;
 check('chargement → pas en partie', M.inRun() === false);
 nodes['boot']._hidden = true;
+
+
+console.log('\n--- un écran inconnu est traité comme un menu ---');
+// Garantie de la logique inversée : ce que l'auteur ajoutera plus tard ne doit
+// pas faire croire qu'on est en partie.
+nodes['scr-nouveau'] = el('scr-nouveau', { hidden: true });
+SCR_IDS.push('scr-nouveau');
+check('écran inconnu masqué → toujours en partie', M.inRun() === true);
+nodes['scr-nouveau']._hidden = false;
+check('écran inconnu visible → pas en partie', M.inRun() === false,
+  'un écran ajouté par le jeu doit compter comme un menu');
+nodes['scr-nouveau']._hidden = true;
+check('refermé → de nouveau en partie', M.inRun() === true);
+
 
 console.log(fails === 0 ? '\nTOUT PASSE\n' : `\n${fails} ÉCHEC(S)\n`);
 process.exit(fails ? 1 : 0);

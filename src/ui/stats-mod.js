@@ -35,7 +35,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.4.0';
+  const VERSION = '0.5.0';
 
   const CFG = {
     show: true,           // panneau visible au démarrage
@@ -67,28 +67,40 @@
    * `num`    : nombre attendu dans la description (identique dans les 2 langues).
    * `max`    : nombre de prises maximum (0 = sans plafond).
    */
+  /* ---------------- cartes de niveau : STATS de js/systems/levelup.js ----------------
+   * Le jeu parle 7 langues depuis le 18-10-2026 (es, en, fr, it, pt-BR, zh-Hans,
+   * zh-Hant). Les TITRES sont traduits, mais les NOMBRES des descriptions
+   * survivent — avec deux pièges relevés dans js/lang/ :
+   *   - le français met une espace avant « % » et une virgule décimale (+0,9) ;
+   *   - le chinois supprime le « + » de l'armure et de la régénération
+   *     (« 受到的傷害減少 6% », « 每秒恢復 0.9 生命值 »).
+   * Les regex ci-dessous encaissent les trois formes. test/stats-mod.test.js
+   * vérifie, pour les 7 langues, que chaque description ne correspond qu'à UNE
+   * seule ligne — sans quoi on ne compterait rien, ou n'importe quoi.
+   *
+   * `titles` ne sert plus qu'à confirmer (espagnol et anglais) : une 8ᵉ langue
+   * fonctionnera sans y toucher.
+   * `max` : nombre de prises maximum (0 = sans plafond).
+   */
   const RUN = [
-    // max: 0 = aucun plafond (le jeu n'en met pas sur Vigor ni Síntesis :
-    // `room()` dans levelup.js laisse passer une stat sans `max`). Affichés
-    // sans dénominateur dans le panneau.
+    // max: 0 = aucun plafond (le jeu n'en met ni sur Vigor ni sur Síntesis)
     { id: 'hp',  label: 'Vie max.', titles: ['Vigor', 'Vigor'],
-      num: /\+\s*20\b/, max: 0 },
+      num: /\+\s*20(?!\s*%)/, max: 0 },
     { id: 'atk', label: 'Dégâts', titles: ['Potencia', 'Power'],
       num: /\+\s*10\s*%/, max: 40 },
     { id: 'spd', label: 'Vitesse', titles: ['Carrera', 'Sprint'],
       num: /\+\s*7\s*%/, max: 8 },
     { id: 'cd',  label: 'Cadence', titles: ['Reflejos', 'Reflexes'],
       num: /-\s*8\s*%/, max: 10 },
-    // deux plafonds : 12 prises, ET un effet borné à 70 % par le jeu
-    // (Math.min(0.7, …) dans levelup.js). Avec 8 niveaux de boutique (0.16) les
-    // 70 % tombent dès la 9ᵉ prise : les suivantes ne servent plus à rien.
+    // le chinois écrit « 6% » sans signe : on accepte, mais jamais « -6% »
     { id: 'def', label: 'Armure', titles: ['Coraza', 'Armor'],
-      num: /\+\s*6\s*%/, max: 12, capAt: 0.70 },
+      num: /(?:^|[^\d-])6\s*%/, max: 12, capAt: 0.70 },
+    // « 0.9 » ou « 0,9 », avec ou sans « + » : aucune autre carte ne le porte
     { id: 'rgn', label: 'Régén.', titles: ['Síntesis', 'Synthesis'],
-      num: /\+\s*0[.,]9/, max: 0 },
+      num: /0[.,]9/, max: 0 },
     { id: 'mag', label: 'Aimant', titles: ['Imán', 'Magnet'],
       num: /\+\s*30\s*%/, max: 6 },
-    { id: 'xp',  label: 'XP', titles: ['Aprendizaje', 'Learning'],
+    { id: 'xp', label: 'XP', titles: ['Aprendizaje', 'Learning'],
       num: /\+\s*12\s*%/, max: 8 }
   ];
 
@@ -150,16 +162,28 @@
    * hors-partie n'est ouvert. Les écrans de run (niveau, pause, objet, vínculo,
    * résumé) n'interrompent pas l'affichage.
    */
-  const OUT_SCREENS = ['scr-login', 'scr-test', 'scr-result', 'scr-starters', 'scr-menu',
-    'scr-dex', 'scr-upgrades', 'scr-gacha', 'scr-nick', 'scr-friends', 'scr-lobby',
-    'scr-rank', 'scr-goals', 'scr-mod', 'scr-settings', 'scr-gacha'];
+  /* Les écrans qui NE sortent PAS de la partie. Tout autre <section class="scr">
+   * visible signifie qu'on est dans un menu.
+   *
+   * La liste est prise par ce bout-là, et non par son contraire : un écran
+   * ajouté par l'auteur sera alors traité comme un menu — le bon défaut — au
+   * lieu de passer inaperçu. (Le jeu en a 19 au 20-10-2026.)
+   */
+  const RUN_SCREENS = ['scr-levelup', 'scr-pause', 'scr-over', 'scr-item', 'scr-bond'];
   const vis = id => { const e = document.getElementById(id); return !!e && !e.classList.contains('hidden'); };
 
   function inRun() {
+    // La barre du haut est masquée pendant la partie (G.UI.chrome(false)).
     const tb = document.getElementById('topbar');
     if (!tb || !tb.classList.contains('hidden')) return false;
     if (vis('boot') || vis('tap-start')) return false;
-    return !OUT_SCREENS.some(vis);
+    let menus;
+    try { menus = document.querySelectorAll('section.scr'); } catch (e) { return false; }
+    for (const el of menus) {
+      if (el.classList.contains('hidden')) continue;
+      if (!RUN_SCREENS.includes(el.id)) return false;
+    }
+    return true;
   }
 
   /* ---------------- suivi des cartes prises ---------------- */
@@ -181,13 +205,49 @@
     return [...nm.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
   }
 
-  /** Identifie une carte stat : titre exact ET nombre attendu. */
+  /** Le texte d'un sous-élément de la carte. */
+  const txt = (card, sel) => ((card.querySelector(sel) || {}).textContent || '');
+
+  /** L'étiquette (le <span class="tag-chip"> dans .nm). */
+  const tagOf = card => {
+    const nm = card.querySelector('.nm');
+    if (!nm) return '';
+    // Le chip est un enfant de .nm ; on retombe sur les nœuds non-texte si la
+    // structure change, plutôt que de lever une exception.
+    const chip = nm.querySelector ? nm.querySelector('.tag-chip') : null;
+    if (chip) return chip.textContent || '';
+    return [...(nm.childNodes || [])].filter(n => n.nodeType !== 3)
+      .map(n => n.textContent || '').join(' ');
+  };
+
+  /**
+   * Identifie une carte de passif.
+   *
+   * Deux rejets STRUCTURELS d'abord, qui ne dépendent d'aucune langue :
+   *   - étiquette du genre « Nv.2 > 3 » → amélioration d'un mouvement
+   *     (le libellé « Nv. » est traduit, les chiffres et le « > » non) ;
+   *   - titre du genre « Ascuas → Lanzallamas » → évolution.
+   * Puis le nombre de la description doit correspondre à UNE seule ligne : deux
+   * correspondances, c'est une ambiguïté, et on préfère ne rien compter.
+   *
+   * Le titre espagnol ou anglais, quand il correspond, lève tout doute ; dans
+   * les autres langues on s'en passe.
+   */
   function statOf(card) {
+    if (!card) return null;
+    const tag = tagOf(card);
+    if (/\d\s*[>›→]\s*\d/.test(tag)) return null;        // amélioration de mouvement
     const t = titleOf(card);
-    if (!t) return null;
-    const ds = (card.querySelector('.ds') || {}).textContent || '';
-    for (const s of RUN) if (s.titles.includes(t) && s.num.test(ds)) return s;
-    return null;                              // mouvement, évolution, ou la Baya Zidra
+    if (/→/.test(t)) return null;                        // évolution
+    const ds = txt(card, '.ds');
+    if (!ds) return null;
+
+    const byTitle = RUN.find(s => s.titles.includes(t));
+    if (byTitle && byTitle.num.test(ds)) return byTitle;
+
+    const hits = RUN.filter(s => s.num.test(ds));
+    if (hits.length === 1) return hits[0];
+    return null;        // rien, ou ambigu : on ne devine pas
   }
 
   function take(card) {

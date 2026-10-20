@@ -42,17 +42,30 @@ sources.
 
 ## Signatures du HUD d'origine
 
-Ce sont des constantes du code du jeu, regroupées en haut de `hud-mod.js` :
+**Aucune position absolue.** Depuis le 18-10-2026 le jeu décale son bloc de vie
+de la zone sûre de l'écran, pour l'encoche de l'iPhone :
+
+```js
+const sa = G.Touch.safeArea();
+const px = 16 + sa.left, py = 20 + sa.top;
+```
+
+Des coordonnées en dur seraient donc justes sur un écran d'ordinateur
+(`sa` = 0) et fausses sur un téléphone. Le mod repère **ma barre à sa taille**
+— 168 × 11, une signature qu'aucun autre dessin du HUD ne porte — et déduit
+tout le reste en relatif de son coin haut-gauche :
 
 ```
-px = 16, py = 20
-ma barre      bar(ctx, px+48, py+17, 168, 11)   → (64, 37, 168, 11)
-mes chiffres  fillText("h / m", 148, 46), centré
-barre alliée  bar(ctx, px+78, y+1, 110, 8)      → x = 94, hauteur 8
-nom allié     fillText(nom, 16, y+9), aligné à gauche
-"CAÍDO"       fillText("CAÍDO", 210, y+9)
+ma barre      bar(ctx, px+48, py+17, 168, 11)   → ancre (bx, by), détectée
+mes chiffres  fillText("h / m", bx+84, by+9), centré
+barre alliée  bar(ctx, bx+30, …, 110, 8)
+nom allié     fillText(nom, bx-48, …), aligné à gauche
+"CAÍDO"       fillText("CAÍDO", bx+146, …)
 attaques      roundRect(x, y, 54, 54, 12)
 ```
+
+Ce sont ces **décalages relatifs** que `tools/verif-signatures.js` vérifie, et
+non des positions, donc le contrôle survit lui aussi au déplacement du bloc.
 
 Les cinq sites de flèche de bord, chacun avec sa marge `M` :
 
@@ -129,12 +142,27 @@ Les cartes sont du DOM (`#cards .card`). On observe le clic (en capture) et les
 touches `Digit1-3` / `Numpad1-3` quand `#scr-levelup` est visible, puis on lit la
 carte choisie.
 
-Identification d'une carte : **titre exact** (espagnol ou anglais) **et** nombre
-attendu dans la description. Les nombres sont identiques dans les deux langues
-(`js/data/lang-en.js` ne traduit que le texte), et aucun des 64 mouvements du jeu
-ne porte un de ces huit titres — donc pas de confusion avec une carte
-« nouveau mouvement », « amélioration » ou « évolution ». Le titre est extrait
-des seuls nœuds texte de `.nm`, pour exclure le `<span class="tag-chip">`.
+Identification d'une carte, en **7 langues** (le jeu parle espagnol, anglais,
+français, italien, portugais du Brésil et les deux chinois depuis le
+18-10-2026). Les titres sont traduits, donc on ne peut pas s'y fier seul. La
+reconnaissance repose sur deux rejets **structurels**, indépendants de la
+langue, puis sur le nombre de la description :
+
+1. étiquette du genre « Nv.2 > 3 » → amélioration d'un mouvement (le libellé
+   « Nv. » est traduit, les chiffres et le « > » non) ;
+2. titre du genre « Ascuas → Lanzallamas » → évolution ;
+3. puis le nombre doit viser **une seule** ligne de la table : deux
+   correspondances, c'est une ambiguïté, et on ne compte rien.
+
+Les nombres survivent à la traduction, avec deux pièges relevés dans `js/lang/` :
+le **français** met une espace avant « % » et une virgule décimale (`+0,9`), et
+le **chinois** supprime le « + » de l'armure et de la régénération
+(« 受到的傷害減少 6% »). Les regex encaissent les trois formes, et le test
+vérifie les 7 langues description par description.
+
+Le titre espagnol ou anglais, quand il correspond, lève tout doute ; une 8ᵉ
+langue fonctionnera sans toucher au code. Le titre est extrait des seuls nœuds
+texte de `.nm`, pour exclure le `<span class="tag-chip">`.
 
 Double comptage : un drapeau `picked`, remis à zéro par un `MutationObserver` sur
 `#cards` — les cartes sont reconstruites à chaque montée de niveau et à chaque
@@ -170,15 +198,26 @@ Noter que le commentaire de l'auteur dit « Cada mejora tiene un tope de veces �
 alors que le code n'en met ni sur `hp` ni sur `rgn`.
 
 Détection de partie, sans toucher au canvas : la barre du haut est masquée
-(`G.UI.chrome(false)` au démarrage de la run) et aucun écran hors-partie n'est
-ouvert. Les écrans de run (niveau, pause, objet, vínculo, résumé) ne coupent pas
-l'affichage. Le passage hors-partie → partie remet les compteurs à zéro et
-relit la base.
+(`G.UI.chrome(false)` au démarrage de la run) et aucun `<section class="scr">`
+hors-partie n'est ouvert. La liste est prise **par les écrans de partie**
+(niveau, pause, objet, vínculo, résumé) et tout le reste compte comme un menu :
+un écran ajouté plus tard par l'auteur sera ainsi traité correctement par
+défaut, au lieu de passer inaperçu. Le passage hors-partie → partie remet les
+compteurs à zéro et relit la base.
 
 **Dette assumée** : ce module duplique deux tables d'équilibrage du jeu. Un
 rééquilibrage de l'auteur ne casserait rien visiblement — les chiffres
 deviendraient faux en silence. C'est pourquoi `tools/verif-signatures.js`
 revérifie aussi ces tables face aux sources.
+
+## Compatibilité avec le CSP du jeu
+
+Le jeu applique depuis le 18-10-2026 une politique de sécurité
+`script-src 'self' …`, sans `'unsafe-inline'`. Le mod la respecte sans effort :
+il n'injecte aucune balise `<script>`, n'utilise ni `eval` ni `new Function`, et
+les content scripts d'une extension sont de toute façon exemptés du CSP de la
+page. C'est en revanche ce CSP qui a condamné la variante userscript, dont
+l'injection passe par un script inline.
 
 ## Garde-fous
 
