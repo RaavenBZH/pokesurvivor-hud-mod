@@ -396,6 +396,102 @@ check('chargement → pas en partie', M.inRun() === false);
 nodes['boot']._hidden = true;
 
 
+
+/* ================= le résumé de pause (stats du jeu) =================
+ * Structure reprise de run-ui.js:pauseSummary() :
+ *   <div class="sum-stats"><div><span>LIBELLÉ</span><b>VALEUR</b></div> ×10</div>
+ *   <table class="sum-moves"><tr><th>…</th></tr><tr><td>nom</td><td>cat</td><td>dégâts</td><td>par seconde</td></tr>…</table>
+ * On lit par POSITION : les libellés sont traduits en 7 langues, l'ordre non.
+ */
+console.log('\n--- résumé de pause : stats du jeu ---');
+
+function statRow(label, value, small) {
+  const sm = small ? { textContent: small } : null;
+  const b = {
+    textContent: value + (small ? ' ' + small : ''),
+    querySelector: sel => (sel === 'small' ? sm : null)
+  };
+  return { querySelector: sel => (sel === 'b' ? b : sel === 'span' ? { textContent: label } : null) };
+}
+function moveRow(name, cat, dmg, dps) {
+  const cells = [
+    { textContent: name + ' Nv.3', querySelector: sel => (sel === 'small' ? { textContent: ' Nv.3' } : null) },
+    { textContent: cat, querySelector: () => null },
+    { textContent: dmg, querySelector: () => null },
+    { textContent: dps, querySelector: () => null }
+  ];
+  return { querySelectorAll: sel => (sel === 'td' ? cells : []) };
+}
+function headerRow() { return { querySelectorAll: () => [] }; }
+
+/** Installe un faux #pause-sum. `labels` permet de tester une autre langue. */
+function pauseSum(stats, moves) {
+  const rows = stats.map(a => statRow(a[0], a[1], a[2]));
+  const trs = [headerRow(), ...moves];
+  nodes['pause-sum'] = {
+    id: 'pause-sum',
+    classList: { contains: () => false, add() {}, remove() {} },
+    querySelectorAll: sel => (sel === '.sum-stats > div' ? rows : sel === '.sum-moves tr' ? trs : [])
+  };
+}
+
+// l'ordre exact du jeu, avec des libellés ESPAGNOLS
+const ES_ROWS = [
+  ['Vida', '120 / 240'], ['Ataque', '×2,41'], ['At. Esp.', '×1,18'],
+  ['Defensa', '40', '−12 % físico'], ['Def. Esp.', '50', '−16 % especial'],
+  ['Velocidad', '132'], ['Crítico', '9 %'], ['Reducción de daño', '26 %'],
+  ['Recarga', '−18 %'], ['Regeneración', '1,3 /s']
+];
+pauseSum(ES_ROWS, [
+  moveRow('Ascuas', 'Físico', '12.345', '412/s'),
+  moveRow('Danza Dragón', 'Mejora', '—', '—'),
+  moveRow('Rayo Burbuja', 'Especial', '3.100', '96/s')
+]);
+M.readPause();
+let sn = M._snap();
+check('instantané pris', !!sn, 'aucun');
+check('Attaque lue (position 1)', sn && sn.atk === '×2,41', sn && sn.atk);
+check('Att. Spé. lue (position 2)', sn && sn.satk === '×1,18', sn && sn.satk);
+check('Défense sans son <small> explicatif', sn && sn.def === '40', sn && sn.def);
+check('Déf. Spé. sans son <small>', sn && sn.sdef === '50', sn && sn.sdef);
+check('Vitesse lue', sn && sn.spd === '132', sn && sn.spd);
+check('Critique lu', sn && sn.crit === '9 %', sn && sn.crit);
+check('ligne d’en-têtes du tableau ignorée', sn && sn.moves.length === 2, sn && String(sn.moves.length));
+check('mouvement d’appui (sans dégâts) ignoré',
+  sn && !sn.moves.some(m => /Danza/.test(m.name)), sn && JSON.stringify(sn.moves));
+check('nom et dégâts/s extraits', sn && sn.moves[0].dps === '412/s' && /Ascuas/.test(sn.moves[0].name),
+  sn && JSON.stringify(sn.moves[0]));
+check('« Nv.3 » retiré du nom', sn && !/Nv\./.test(sn.moves[0].name), sn && sn.moves[0].name);
+
+console.log('\n--- libellés traduits : la lecture par position tient ---');
+const FR_ROWS = [
+  ['Vie', '120 / 240'], ['Attaque', '×2,41'], ['Att. Spé.', '×1,18'],
+  ['Défense', '40', '−12 % physique'], ['Déf. Spé.', '50', '−16 % spécial'],
+  ['Vitesse', '132'], ['Critique', '9 %'], ['Réduction des dégâts', '26 %'],
+  ['Recharge', '−18 %'], ['Régénération', '1,3 /s']
+];
+pauseSum(FR_ROWS, [moveRow('Flammèche', 'Physique', '12.345', '412/s')]);
+M.readPause();
+sn = M._snap();
+check('français : Attaque toujours lue', sn && sn.atk === '×2,41', sn && sn.atk);
+check('français : Critique toujours lu', sn && sn.crit === '9 %', sn && sn.crit);
+
+console.log('\n--- formats inattendus : on ne casse rien ---');
+const bon = M._snap();
+pauseSum(ES_ROWS.slice(0, 6), []);          // moins de 10 lignes
+M.readPause();
+check('tableau tronqué → l’instantané précédent est conservé',
+  M._snap() === bon, 'écrasé');
+pauseSum([['Vida', '1 / 2'], ['Ataque', '2,41'], ['At. Esp.', '1,18'],
+  ['a', 'b'], ['c', 'd'], ['e', 'f'], ['g', 'h'], ['i', 'j'], ['k', 'l'], ['m', 'n']], []);
+M.readPause();
+check('Attaque sans « × » → format non reconnu, rien n’est écrasé',
+  M._snap() === bon, 'écrasé');
+delete nodes['pause-sum'];
+M.readPause();
+check('#pause-sum absent → aucune erreur', M._snap() === bon);
+
+
 console.log('\n--- un écran inconnu est traité comme un menu ---');
 // Garantie de la logique inversée : ce que l'auteur ajoutera plus tard ne doit
 // pas faire croire qu'on est en partie.

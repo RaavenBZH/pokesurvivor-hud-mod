@@ -109,8 +109,8 @@ const gameArrows = [
 ].sort((a, b) => a.M - b.M);
 
 /* ---------- ce que dit l'extension ---------- */
-const lit = (name, re) => {
-  const m = re.exec(mod);
+const lit = (name, re, src = mod) => {
+  const m = re.exec(src);
   if (!m) { console.error(`✗ ${name} introuvable dans hud-mod.js`); process.exit(2); }
   return new Function('return ' + m[1])();
 };
@@ -210,6 +210,34 @@ for (const [id, re, attendu] of EFFETS) {
   if (!ok) bad++;
   console.log(`  ${ok ? 'ok  ' : 'DIFF'} ${id.padEnd(8)} jeu ${String(got).padStart(5)}   attendu par l’extension ${attendu.padStart(5)}`);
 }
+
+/* ---------- le résumé de pause, lu par POSITION ----------
+ * stats-mod.js lit les dix lignes de run-ui.js:pauseSummary() par leur rang,
+ * parce que leurs libellés sont traduits en 7 langues. Un réordonnancement de
+ * l'auteur ferait donc afficher des valeurs fausses, SANS erreur visible.
+ */
+const runui = read('js/ui/run-ui.js');
+console.log('\nRésumé de pause : ordre des lignes (js/ui/run-ui.js)');
+const stBlock = /const st = \[([\s\S]*?)\n    \]/.exec(runui);
+if (!stBlock) {
+  console.log('  ✗ tableau `const st = [...]` introuvable : pauseSummary() a changé de forme');
+  bad++;
+} else {
+  const jeu = [...stBlock[1].matchAll(/\[\s*'([^']+)'/g)].map(m => m[1]);
+  const attendu = lit('PAUSE_ROWS', /const PAUSE_ROWS = (\[[\s\S]*?\]);/, statsMod);
+  const n = Math.max(jeu.length, attendu.length);
+  for (let i = 0; i < n; i++) {
+    const ok = jeu[i] === attendu[i];
+    if (!ok) bad++;
+    console.log(`  ${ok ? 'ok  ' : 'DIFF'} ${String(i).padStart(2)}  jeu ${String(jeu[i]).padEnd(20)} extension ${attendu[i]}`);
+  }
+}
+// Colonnes du tableau des mouvements : on lit td[0] (nom) et td[3] (par seconde).
+const ths = (/<table class="sum-moves">(.*?)<\/tr>/s.exec(runui) || [, ''])[1];
+const nTh = (ths.match(/<th/g) || []).length;
+const okTh = nTh === 4 && /Por segundo<\/th>\s*$/.test(ths.trim());
+if (!okTh) bad++;
+console.log(`  ${okTh ? 'ok  ' : 'DIFF'} tableau des mouvements : ${nTh} colonnes, la dernière « Por segundo »`);
 
 if (missing.length) bad += missing.length;
 if (bad === 0) {

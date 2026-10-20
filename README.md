@@ -51,12 +51,12 @@ partie.
 En jeu, `F12` → onglet Console :
 
 ```
-[psx] hud-mod 0.5.0 installé — barres de vie en bas au centre
-[psx] stats-mod 0.5.0 installé — panneau des passifs (F2 pour masquer)
+[psx] hud-mod 0.6.0 installé — barres de vie en bas au centre
+[psx] stats-mod 0.6.0 installé — panneau des passifs (F2 pour masquer)
 ```
 
 Ou tape `__psx` dans la console : tu dois voir
-`{painting: false, hud: "0.5.0", stats: "0.5.0"}`.
+`{painting: false, hud: "0.6.0", stats: "0.6.0"}`.
 
 | Console | Cause | Remède |
 |---|---|---|
@@ -69,7 +69,7 @@ Ou tape `__psx` dans la console : tu dois voir
 > pas de façon fiable. Joue dans un onglet.
 
 ### Note sur Tampermonkey
-Les versions ≤ 0.3.2 proposaient aussi un userscript. **Abandonné en 0.5.0** :
+Les versions ≤ 0.3.2 proposaient aussi un userscript. **Abandonné en 0.6.0** :
 depuis Chrome 120, Tampermonkey exige de toute façon le mode développeur, et il
 n'obéit pas toujours à `@inject-into page` — or ce mod n'a aucun sens hors du
 monde de la page. L'extension ne coûte donc pas plus cher et ne laisse aucune
@@ -87,6 +87,7 @@ incertitude. Si tu avais installé le userscript, **supprime-le** de Tampermonke
 | Vie basse | rien | **contour rouge dégradé** sur les bords sous 20 %, qui s'intensifie et pulse plus vite à mesure que la vie descend |
 | Flèches vers ce qui est hors écran | plaquées contre le bord | **en anneau autour de ton Pokémon** |
 | Passifs de la run (dégâts, vitesse…) | invisibles | **panneau en haut à gauche** |
+| Attaque / Att. Spé., défenses, dégâts par seconde | seulement dans la pause | **dans le panneau, en partie** |
 | Nom, niveau, chrono, XP, buffs, boss, attaques | — | inchangés |
 
 **Couleur de ma barre** selon la vie restante :
@@ -100,9 +101,9 @@ coéquipiers hors de vue, Pokémon perdu et voleurs, et Arceus pendant la
 Sentencia. Chaque flèche garde son dessin, sa couleur, son icône et son
 étiquette — seul son point d'ancrage change.
 
-### Le panneau des passifs
+### Le panneau
 
-En haut à gauche, pendant la partie :
+En haut à gauche, pendant la partie, en trois blocs :
 
 ```
   PASSIFS
@@ -114,7 +115,41 @@ En haut à gauche, pendant la partie :
   Régén.        1.3/s
   Aimant        ×1.24
   XP            ×1.30
+
+  STATS · il y a 2 min
+  Attaque       ×2,41
+  Att. Spé.     ×1,18
+  Défense          40
+  Déf. Spé.        50
+  Critique        9 %
+
+  DÉGÂTS / s
+  Flammèche     412/s
+  Rayo Burbuja   96/s
 ```
+
+**PASSIFS** suit en direct ce que la run a amélioré (voir plus bas).
+
+**STATS** montre les statistiques que le jeu a ajoutées le 18-10-2026 : Attaque
+et Attaque Spéciale séparées — chaque mouvement est désormais physique ou
+spécial, et taper du mauvais côté coûte cher — puis les deux défenses et le taux
+de critique. **Le côté fort est mis en couleur** : c'est lui qui décide quels
+mouvements valent le coup.
+
+**DÉGÂTS / s** donne les dégâts par seconde de chacune de tes attaques, soit
+laquelle porte réellement ta run.
+
+> Ces deux derniers blocs viennent du **résumé de la pause** : le jeu les
+> calcule, l'extension les lit là. Ils ne se rafraîchissent donc qu'à chaque
+> ouverture de la pause (`Échap`), et le panneau affiche l'âge de la mesure —
+> grisée au-delà de 3 minutes. Avant la première pause, il affiche
+> « Ouvre la pause ».
+>
+> Pourquoi pas en direct ? Ces valeurs viennent des données d'espèce des
+> 966 Pokémon : le jeu ne les dessine jamais en partie et ne les sert pas à
+> part. Les recopier dans l'extension aurait créé une dette qui se périme à
+> chaque rééquilibrage. Les lire là où le jeu les affiche lui-même, c'est zéro
+> duplication et zéro dérive.
 
 - La valeur est le **total** : améliorations achetées en boutique **plus** cartes
   prises dans la run.
@@ -190,7 +225,10 @@ const CFG = {
   x: 18, y: 80,       // coin haut-gauche, en px
   w: 150,             // largeur
   row: 15,            // hauteur d'une ligne
-  counts: false       // true pour ajouter « 3/8 » (prises / plafond)
+  counts: false,      // true pour ajouter « 3/8 » (prises / plafond)
+  passifs: true,      // bloc PASSIFS
+  stats: true,        // bloc STATS (résumé de pause)
+  degats: true        // bloc DÉGÂTS / s (résumé de pause)
 };
 ```
 
@@ -331,7 +369,9 @@ clone du jeu — voir §4c.
 | La barre est revenue en haut à gauche | le jeu a changé son HUD | §4c |
 | `[psx] hud-mod désarmé : …` en console | 30 erreurs d'affilée, le module s'est coupé | Note le message et relance `node tools/verif-signatures.js` puis `node test/hud-mod.test.js` |
 | Les flèches restent au bord | `arrows: false`, ou les marges ont changé | §3, puis §4c |
-| Pas de panneau des passifs | masqué (`F2`), ou `show: false` | Appuie sur `F2` en partie |
+| Pas de panneau | masqué (`F2`), ou `show: false` | Appuie sur `F2` en partie |
+| STATS et DÉGÂTS disent « Ouvre la pause » | aucun instantané encore pris | Appuie une fois sur `Échap` en partie |
+| STATS grisées | instantané de plus de 3 min | Rouvre la pause pour rafraîchir |
 | `Aucun appel de dessin observé sur #game` | le mod tourne hors du monde de la page | `manifest.json` doit déclarer `"world": "MAIN"` |
 | Les passifs affichent des valeurs douteuses | le jeu a été rééquilibré | §4c — c'est exactement ce que le script détecte |
 | Les passifs partent d'une base fausse | achat en boutique pas encore enregistré | Reviens au menu puis relance une partie |
@@ -364,7 +404,10 @@ le jeu d'origine.
   et un rééquilibrage du jeu fausserait les chiffres sans rien casser — d'où le
   script de vérification (§4c).
 - **Les objets ramassés en jeu** (qui donnent aussi des effets) ne sont pas
-  comptés dans le panneau : seules les cartes de niveau le sont.
+  comptés dans le bloc PASSIFS : seules les cartes de niveau le sont. Ils sont
+  en revanche inclus dans le bloc STATS, puisque le jeu les y intègre.
+- **STATS et DÉGÂTS / s** sont un instantané de la dernière pause, pas du
+  direct — pour la raison expliquée en §2.
 
 ---
 

@@ -210,6 +210,38 @@ rééquilibrage de l'auteur ne casserait rien visiblement — les chiffres
 deviendraient faux en silence. C'est pourquoi `tools/verif-signatures.js`
 revérifie aussi ces tables face aux sources.
 
+### Les statistiques du jeu (depuis le 18-10-2026)
+
+Le jeu calcule maintenant Attaque et Attaque Spéciale séparées (chaque mouvement
+porte `m.cat`), ainsi que Défense et Défense Spéciale, à partir des données
+d'espèce `mon.pa`, `mon.sa`, `mon.df`, `mon.sd` (`js/systems/stats.js`).
+
+Ces valeurs ne sont **ni dessinées en partie, ni servies à part** : le
+`gamedata.json` de `tools/export_data.js` reste dans `tools/cache/`, et les
+pages SEO ne les contiennent pas. Les recopier aurait voulu dire embarquer
+966 fiches qui se périment à chaque rééquilibrage.
+
+Mais le jeu les affiche lui-même dans le **résumé de la pause**
+(`#pause-sum`, `run-ui.js:pauseSummary`), en DOM. On les lit donc là, déjà
+calculées : zéro duplication, zéro dérive. Un `MutationObserver` sur
+`#pause-sum` capte chaque réécriture, soit chaque ouverture de la pause.
+
+Deux précautions :
+
+- **Lecture par position**, pas par libellé : les dix lignes sortent d'un
+  tableau littéral, alors que les libellés sont traduits en 7 langues. La
+  constante `PAUSE_ROWS` fixe cet ordre et `tools/verif-signatures.js` le
+  compare aux sources — un réordonnancement afficherait sinon des valeurs
+  fausses sans aucune erreur. Vérifié en échangeant deux lignes dans une copie
+  du jeu : le script sort 2 écarts.
+- **On garde les chaînes telles quelles**, sans les reparser. Le jeu formate
+  toujours en espagnol (`toLocaleString('es')`, puis `.` → `,`), donc
+  « ×2,41 » et « 12.345 » n'ont pas à être réinterprétés — et il n'y a aucune
+  ambiguïté séparateur de milliers / décimale à se tromper.
+
+Contrepartie : les valeurs sont un instantané de la dernière pause. Le panneau
+en affiche l'âge et grise le bloc au-delà de 3 minutes.
+
 ## Compatibilité avec le CSP du jeu
 
 Le jeu applique depuis le 18-10-2026 une politique de sécurité

@@ -35,16 +35,20 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.5.0';
+  const VERSION = '0.6.0';
 
   const CFG = {
     show: true,           // panneau visible au démarrage
     toggleKey: 'F2',      // touche pour l'afficher / le masquer (libre dans le jeu)
     x: 18,                // coin haut-gauche du panneau, en px CSS
     y: 80,                // sous les pastilles de buff du jeu
-    w: 150,
+    w: 186,
     row: 15,
-    counts: false         // true pour afficher aussi « 3/8 » (prises / plafond)
+    counts: false,        // true pour afficher aussi « 3/8 » (prises / plafond)
+    // Les trois blocs du panneau, à couper indépendamment.
+    passifs: true,        // ce que la run a amélioré (suivi en direct)
+    stats: true,          // Attaque / Att. Spé. / Défenses / Critique (résumé de pause)
+    degats: true          // dégâts par seconde de chaque attaque (résumé de pause)
   };
 
   // Drapeau de dessin partagé avec src/ui/hud-mod.js (voir son en-tête).
@@ -157,7 +161,87 @@
     return b;
   }
 
-  /* ---------------- où en est-on ? (DOM, voir docs/03-GAME-REFERENCE.md §2) ----------------
+  /* ================= les stats du jeu, lues dans le résumé de pause =================
+   *
+   * Depuis le 18-10-2026 le jeu calcule des statistiques à la façon des vrais
+   * jeux Pokémon : Attaque et Attaque Spéciale séparées (chaque mouvement est
+   * physique ou spécial), Défense et Défense Spéciale, et les dégâts infligés
+   * par mouvement.
+   *
+   * Ces valeurs viennent des données d'espèce (`mon.pa`, `mon.sa`, `mon.df`,
+   * `mon.sd`) : elles ne sont ni dessinées en partie, ni servies à part, et
+   * recopier 966 fiches dans l'extension serait une dette absurde.
+   *
+   * MAIS le jeu les affiche lui-même dans le résumé de la pause, en DOM
+   * (`#pause-sum`, voir run-ui.js:pauseSummary). On les lit donc là, calculées
+   * par le jeu : aucune duplication, aucune dérive possible.
+   *
+   * Lecture par POSITION et non par libellé : l'ordre des dix lignes est celui
+   * d'un tableau littéral du jeu, alors que les libellés sont traduits en
+   * 7 langues. Et on garde les chaînes telles que le jeu les a formatées
+   * (toujours au format espagnol, `toLocaleString('es')`), pour n'avoir aucun
+   * nombre à réinterpréter.
+   *
+   * Contrepartie assumée : le résumé n'existe que quand la pause s'ouvre. Le
+   * panneau montre donc le dernier instantané, et en affiche l'âge.
+   */
+  /* Les dix lignes de run-ui.js:pauseSummary(), DANS L'ORDRE. On lit par
+   * position, donc cet ordre est la seule chose dont on dépende — et
+   * tools/verif-signatures.js le compare aux sources du jeu : si l'auteur
+   * réordonne ses lignes, le panneau afficherait des valeurs fausses sans rien
+   * signaler. Les libellés ci-dessous ne servent QU'À cette vérification.
+   */
+  const PAUSE_ROWS = ['Vida', 'Ataque', 'At. Esp.', 'Defensa', 'Def. Esp.',
+    'Velocidad', 'Crítico', 'Reducción de daño', 'Recarga', 'Regeneración'];
+  const IDX = {
+    atk: PAUSE_ROWS.indexOf('Ataque'), satk: PAUSE_ROWS.indexOf('At. Esp.'),
+    def: PAUSE_ROWS.indexOf('Defensa'), sdef: PAUSE_ROWS.indexOf('Def. Esp.'),
+    spd: PAUSE_ROWS.indexOf('Velocidad'), crit: PAUSE_ROWS.indexOf('Crítico')
+  };
+
+  let snap = null;        // { at, atk, satk, def, sdef, spd, crit, moves: [...] }
+
+  /** Le texte d'une valeur, sans le <small> explicatif qui ne tiendrait pas. */
+  function cellText(node) {
+    if (!node) return '';
+    let t = node.textContent || '';
+    const small = node.querySelector && node.querySelector('small');
+    if (small && small.textContent) t = t.replace(small.textContent, '');
+    return t.trim();
+  }
+
+  function readPause() {
+    const box = document.getElementById('pause-sum');
+    if (!box || !box.querySelectorAll) return;
+    const rows = [...box.querySelectorAll('.sum-stats > div')];
+    if (rows.length < PAUSE_ROWS.length) return;   // format inattendu : on ne touche à rien
+    const v = i => cellText(rows[i] && rows[i].querySelector && rows[i].querySelector('b'));
+    const atk = v(IDX.atk), satk = v(IDX.satk);
+    if (!/^[×x]/.test(atk) || !/^[×x]/.test(satk)) return;   // pas le tableau attendu
+    const moves = [];
+    for (const tr of box.querySelectorAll('.sum-moves tr')) {
+      const td = tr.querySelectorAll ? tr.querySelectorAll('td') : [];
+      if (td.length < 4) continue;                 // la ligne d'en-têtes
+      const dps = cellText(td[3]);
+      if (!dps || dps === '—') continue;           // mouvement d'appui, sans dégâts
+      moves.push({ name: cellText(td[0]), dps });
+    }
+    snap = { at: performance.now(), atk, satk,
+      def: v(IDX.def), sdef: v(IDX.sdef), spd: v(IDX.spd), crit: v(IDX.crit), moves };
+  }
+
+  function watchPause() {
+    const box = document.getElementById('pause-sum');
+    if (!box) return false;
+    try {
+      // Le jeu réécrit ce bloc à chaque ouverture de la pause : c'est le signal.
+      new MutationObserver(readPause).observe(box, { childList: true });
+    } catch (e) { return false; }
+    readPause();
+    return true;
+  }
+
+  /* ---------------- où en est-on ? (DOM) ----------------
    * En partie : la barre du haut est masquée (G.UI.chrome(false)) et aucun écran
    * hors-partie n'est ouvert. Les écrans de run (niveau, pause, objet, vínculo,
    * résumé) n'interrompent pas l'affichage.
@@ -287,6 +371,12 @@
     new MutationObserver(() => { picked = false; }).observe(box, { childList: true });
     return true;
   }
+  if (!watchPause()) {
+    const w2 = new MutationObserver(() => { if (watchPause()) w2.disconnect(); });
+    try { w2.observe(document.documentElement || document, { childList: true, subtree: true }); }
+    catch (e) { /* DOM pas encore là : la pause sera lue au prochain passage */ }
+  }
+
   if (!watchCards()) {
     // `document` et pas `document.documentElement` : au document-start d'un
     // userscript, <html> peut ne pas encore exister, et observe(null) lève une
@@ -313,14 +403,50 @@
 
   const F = (w, s) => `${w} ${s}px Pixelify, "Segoe UI", system-ui, sans-serif`;
 
-  function draw(ctx) {
-    const vals = compute(base, taken);
-    const x = CFG.x, w = CFG.w;
-    const head = 17, pad = 7;
-    const h = head + pad + RUN.length * CFG.row + pad - 3;
-    const y = CFG.y;
+  /** Âge du dernier instantané de pause, en clair. */
+  function snapAge() {
+    if (!snap) return null;
+    const sec = Math.round((performance.now() - snap.at) / 1000);
+    if (sec < 10) return 'à l’instant';
+    if (sec < 60) return 'il y a ' + sec + ' s';
+    return 'il y a ' + Math.round(sec / 60) + ' min';
+  }
 
-    roundRect(ctx, x, y, w, h, 8);
+  /* -- une ligne « libellé … valeur » -- */
+  function row(ctx, x, w, y, label, value, color, dim) {
+    ctx.font = F(700, 10);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = dim ? 'rgba(190,205,230,.42)' : 'rgba(190,205,230,.78)';
+    ctx.fillText(label, x, y);
+    ctx.font = F(800, 11);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = dim ? 'rgba(210,222,240,.42)' : color;
+    ctx.fillText(value, x + w, y);
+  }
+
+  function header(ctx, x, y, txt) {
+    ctx.font = F(800, 9);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#8fa3c4';
+    ctx.fillText(txt, x, y);
+  }
+
+  function draw(ctx) {
+    const PAD = 7, x = CFG.x + PAD, w = CFG.w - PAD * 2;
+    const vals = compute(base, taken);
+    const age = snapAge();
+    // Un instantané de plus de 3 min est grisé : les valeurs ont bougé depuis.
+    const stale = snap && performance.now() - snap.at > 180000;
+
+    /* --- hauteur totale, pour le cadre --- */
+    let lines = 0, heads = 0;
+    if (CFG.passifs) { heads++; lines += RUN.length; }
+    if (CFG.stats) { heads++; lines += snap ? 5 : 1; }
+    if (CFG.degats) { heads++; lines += snap && snap.moves.length ? Math.min(4, snap.moves.length) : (snap ? 0 : 1); }
+    if (!lines) return;
+    const h = heads * 16 + lines * CFG.row + PAD * 2;
+
+    roundRect(ctx, CFG.x, CFG.y, CFG.w, h, 8);
     ctx.fillStyle = 'rgba(6,11,22,.72)';
     ctx.fill();
     ctx.lineWidth = 1;
@@ -328,34 +454,57 @@
     ctx.stroke();
 
     ctx.textBaseline = 'middle';
-    ctx.font = F(800, 9);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#8fa3c4';
-    ctx.fillText('PASSIFS', x + pad, y + head / 2 + 1);
+    let y = CFG.y + PAD + 8;
 
-    let ry = y + head + pad + CFG.row / 2 - 2;
-    for (const s of RUN) {
-      const v = vals[s.id];
-      const n = taken[s.id] || 0;
-      const maxed = isMaxed(s, n, v.v);
-
-      ctx.font = F(700, 10);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(190,205,230,.78)';
-      ctx.fillText(s.label, x + pad, ry);
-
-      ctx.font = F(800, 11);
-      ctx.textAlign = 'right';
-      // doré quand la run a amélioré ce passif, gris sinon
-      ctx.fillStyle = n > 0 ? (maxed ? '#9ae6ff' : '#ffd23f') : 'rgba(210,222,240,.6)';
-      ctx.fillText(v.txt(v.v), x + w - pad - (CFG.counts ? 38 : 0), ry);
-
-      if (CFG.counts) {
-        ctx.font = F(700, 9);
-        ctx.fillStyle = n > 0 ? 'rgba(190,205,230,.6)' : 'rgba(190,205,230,.28)';
-        ctx.fillText(s.max ? n + '/' + s.max : String(n), x + w - pad, ry);
+    /* --- ce que la run a amélioré (suivi en direct) --- */
+    if (CFG.passifs) {
+      header(ctx, x, y, 'PASSIFS');
+      y += 16;
+      for (const st of RUN) {
+        const v = vals[st.id];
+        const n = taken[st.id] || 0;
+        const maxed = isMaxed(st, n, v.v);
+        let val = v.txt(v.v);
+        if (CFG.counts) val += '   ' + (st.max ? n + '/' + st.max : String(n));
+        row(ctx, x, w, y, st.label, val,
+          n > 0 ? (maxed ? '#9ae6ff' : '#ffd23f') : 'rgba(210,222,240,.6)');
+        y += CFG.row;
       }
-      ry += CFG.row;
+    }
+
+    /* --- les stats du jeu, dernier instantané de pause --- */
+    if (CFG.stats) {
+      header(ctx, x, y, 'STATS' + (age ? ' · ' + age : ''));
+      y += 16;
+      if (!snap) {
+        row(ctx, x, w, y, 'Ouvre la pause', 'Échap', 'rgba(210,222,240,.5)', true);
+        y += CFG.row;
+      } else {
+        // Attaque et Att. Spé. : le côté fort est mis en avant, c'est ce qui
+        // décide quels mouvements valent le coup depuis la mise à jour.
+        const fortPhy = (snap.atk || '') >= (snap.satk || '');
+        row(ctx, x, w, y, 'Attaque', snap.atk, fortPhy ? '#ff8d5e' : 'rgba(210,222,240,.6)', stale); y += CFG.row;
+        row(ctx, x, w, y, 'Att. Spé.', snap.satk, fortPhy ? 'rgba(210,222,240,.6)' : '#c47bff', stale); y += CFG.row;
+        row(ctx, x, w, y, 'Défense', snap.def, 'rgba(210,222,240,.75)', stale); y += CFG.row;
+        row(ctx, x, w, y, 'Déf. Spé.', snap.sdef, 'rgba(210,222,240,.75)', stale); y += CFG.row;
+        row(ctx, x, w, y, 'Critique', snap.crit, '#ffd23f', stale); y += CFG.row;
+      }
+    }
+
+    /* --- dégâts par seconde de chaque attaque --- */
+    if (CFG.degats) {
+      header(ctx, x, y, 'DÉGÂTS / s');
+      y += 16;
+      if (!snap) {
+        row(ctx, x, w, y, 'Ouvre la pause', 'Échap', 'rgba(210,222,240,.5)', true);
+        y += CFG.row;
+      } else {
+        for (const m of snap.moves.slice(0, 4)) {
+          row(ctx, x, w, y, m.name.length > 13 ? m.name.slice(0, 12) + '…' : m.name,
+            m.dps, '#7fe0a0', stale);
+          y += CFG.row;
+        }
+      }
     }
   }
 
@@ -398,7 +547,7 @@
 
   // Pour les tests (node) : rien n'est exposé à la page en dehors de __psx.
   if (typeof module === 'object' && module.exports) {
-    module.exports = { CFG, SHOP, RUN, compute, readBase, statOf, titleOf, inRun, isMaxed, DEFAULT_BASE, _take: take, _newChoice: () => { picked = false; }, _reset: startRun, _state: () => ({ base, taken, get picked() { return picked; } }) };
+    module.exports = { CFG, SHOP, RUN, PAUSE_ROWS, IDX, compute, readBase, statOf, titleOf, inRun, isMaxed, DEFAULT_BASE, readPause, _snap: () => snap, _take: take, _newChoice: () => { picked = false; }, _reset: startRun, _state: () => ({ base, taken, get picked() { return picked; } }) };
   }
 
   PSX.stats = VERSION;     // tape `__psx` dans la console : dit ce qui a chargé
