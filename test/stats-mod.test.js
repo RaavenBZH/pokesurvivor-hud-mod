@@ -492,6 +492,36 @@ M.readPause();
 check('#pause-sum absent → aucune erreur', M._snap() === bon);
 
 
+
+console.log('\n--- les 9 lignes affichées, et lesquelles sont invariantes ---');
+const shown = M.SHOWN.map(r => r.k);
+check('les 9 lignes utiles du résumé sont affichées',
+  shown.join(',') === 'atk,satk,def,sdef,spd,crit,red,cd,rgn', shown.join(','));
+check('« Vida » n’est pas repris (déjà sur la barre de vie)', !shown.includes('hp'));
+const fixes = M.SHOWN.filter(r => r.fixe).map(r => r.k);
+check('Défense, Déf. Spé. et Critique marquées invariantes',
+  fixes.join(',') === 'def,sdef,crit', fixes.join(','));
+check('Attaque et Vitesse NE sont pas invariantes (cartes, objets, météo, terrain)',
+  !M.SHOWN.find(r => r.k === 'atk').fixe && !M.SHOWN.find(r => r.k === 'spd').fixe);
+check('les 3 lignes de plus sont bien lues', (() => {
+  pauseSum(ES_ROWS, []); M.readPause();
+  const sn = M._snap();
+  return sn.red === '26 %' && sn.cd === '−18 %' && sn.rgn === '1,3 /s';
+})(), JSON.stringify(M._snap()));
+
+console.log('\n--- Aimant et XP : les seuls passifs que le jeu n’affiche pas ---');
+const extras = M.EXTRAS.map(e => e.id);
+check('deux extras seulement : aimant et XP', extras.join(',') === 'mag,xp', extras.join(','));
+check('aucun doublon avec les lignes du résumé',
+  !extras.some(id => shown.includes(id)), extras.join(','));
+check('le bloc PASSIFS a disparu de la configuration', M.CFG.passifs === undefined);
+check('les extras restent calculés exactement', (() => {
+  M._reset(); M._newChoice(); M._take(es.mag); M._newChoice(); M._take(es.xp);
+  const v = M.compute(M.DEFAULT_BASE(), M._state().taken);
+  return close(v.mag.v, 1.30) && close(v.xp.v, 1.12);
+})(), JSON.stringify(M._state().taken));
+
+
 console.log('\n--- un écran inconnu est traité comme un menu ---');
 // Garantie de la logique inversée : ce que l'auteur ajoutera plus tard ne doit
 // pas faire croire qu'on est en partie.

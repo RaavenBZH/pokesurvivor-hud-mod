@@ -35,7 +35,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.6.0';
+  const VERSION = '0.7.0';
 
   const CFG = {
     show: true,           // panneau visible au démarrage
@@ -44,11 +44,10 @@
     y: 80,                // sous les pastilles de buff du jeu
     w: 186,
     row: 15,
-    counts: false,        // true pour afficher aussi « 3/8 » (prises / plafond)
-    // Les trois blocs du panneau, à couper indépendamment.
-    passifs: true,        // ce que la run a amélioré (suivi en direct)
-    stats: true,          // Attaque / Att. Spé. / Défenses / Critique (résumé de pause)
-    degats: true          // dégâts par seconde de chaque attaque (résumé de pause)
+    // Les blocs du panneau, à couper indépendamment.
+    stats: true,          // les statistiques du jeu
+    extras: true,         // Aimant et XP, que le jeu n'affiche nulle part
+    degats: true          // dégâts par seconde de chaque attaque
   };
 
   // Drapeau de dessin partagé avec src/ui/hud-mod.js (voir son en-tête).
@@ -196,8 +195,38 @@
   const IDX = {
     atk: PAUSE_ROWS.indexOf('Ataque'), satk: PAUSE_ROWS.indexOf('At. Esp.'),
     def: PAUSE_ROWS.indexOf('Defensa'), sdef: PAUSE_ROWS.indexOf('Def. Esp.'),
-    spd: PAUSE_ROWS.indexOf('Velocidad'), crit: PAUSE_ROWS.indexOf('Crítico')
+    spd: PAUSE_ROWS.indexOf('Velocidad'), crit: PAUSE_ROWS.indexOf('Crítico'),
+    red: PAUSE_ROWS.indexOf('Reducción de daño'), cd: PAUSE_ROWS.indexOf('Recarga'),
+    rgn: PAUSE_ROWS.indexOf('Regeneración')
   };
+
+  /* Ce que le panneau montre, dans l'ordre.
+   *
+   * `fixe` : la valeur ne peut PAS changer pendant une run, donc un instantané
+   * reste exact jusqu'à la fin — inutile de la griser.
+   *   - Défense et Déf. Spé. sont `mon.df` / `mon.sd`, les bases d'espèce ;
+   *   - Critique est `perks.crit`, posé au démarrage depuis la boutique.
+   * Les autres bougent avec les cartes prises, les objets et les bonus
+   * temporaires ; la vitesse dépend en plus de la météo et du terrain.
+   */
+  const SHOWN = [
+    { k: 'atk', label: 'Attaque' },
+    { k: 'satk', label: 'Att. Spé.' },
+    { k: 'def', label: 'Défense', fixe: true },
+    { k: 'sdef', label: 'Déf. Spé.', fixe: true },
+    { k: 'spd', label: 'Vitesse' },
+    { k: 'crit', label: 'Critique', fixe: true },
+    { k: 'red', label: 'Armure' },
+    { k: 'cd', label: 'Recharge' },
+    { k: 'rgn', label: 'Régén.' }
+  ];
+
+  /* Les deux seuls passifs que le résumé du jeu n'affiche pas : on les suit
+   * nous-mêmes, exactement (boutique + cartes prises), donc ils sont toujours à
+   * jour. C'est ce qui reste de l'ancien bloc « PASSIFS », le reste faisait
+   * doublon avec les lignes ci-dessus.
+   */
+  const EXTRAS = [{ id: 'mag', label: 'Aimant' }, { id: 'xp', label: 'XP' }];
 
   let snap = null;        // { at, atk, satk, def, sdef, spd, crit, moves: [...] }
 
@@ -227,7 +256,8 @@
       moves.push({ name: cellText(td[0]), dps });
     }
     snap = { at: performance.now(), atk, satk,
-      def: v(IDX.def), sdef: v(IDX.sdef), spd: v(IDX.spd), crit: v(IDX.crit), moves };
+      def: v(IDX.def), sdef: v(IDX.sdef), spd: v(IDX.spd), crit: v(IDX.crit),
+      red: v(IDX.red), cd: v(IDX.cd), rgn: v(IDX.rgn), moves };
   }
 
   function watchPause() {
@@ -433,16 +463,17 @@
 
   function draw(ctx) {
     const PAD = 7, x = CFG.x + PAD, w = CFG.w - PAD * 2;
-    const vals = compute(base, taken);
     const age = snapAge();
-    // Un instantané de plus de 3 min est grisé : les valeurs ont bougé depuis.
-    const stale = snap && performance.now() - snap.at > 180000;
+    // Un instantané de plus de 3 min : seules les valeurs qui PEUVENT avoir
+    // changé sont grisées. Les constantes d'espèce et de boutique, jamais.
+    const stale = !!snap && performance.now() - snap.at > 180000;
+    const vals = CFG.extras ? compute(base, taken) : null;
 
-    /* --- hauteur totale, pour le cadre --- */
+    /* --- hauteur du cadre --- */
     let lines = 0, heads = 0;
-    if (CFG.passifs) { heads++; lines += RUN.length; }
-    if (CFG.stats) { heads++; lines += snap ? 5 : 1; }
-    if (CFG.degats) { heads++; lines += snap && snap.moves.length ? Math.min(4, snap.moves.length) : (snap ? 0 : 1); }
+    if (CFG.stats) { heads++; lines += snap ? SHOWN.length : 1; }
+    if (CFG.extras) lines += EXTRAS.length;
+    if (CFG.degats) { heads++; lines += snap ? Math.min(4, snap.moves.length) : 1; }
     if (!lines) return;
     const h = heads * 16 + lines * CFG.row + PAD * 2;
 
@@ -456,42 +487,38 @@
     ctx.textBaseline = 'middle';
     let y = CFG.y + PAD + 8;
 
-    /* --- ce que la run a amélioré (suivi en direct) --- */
-    if (CFG.passifs) {
-      header(ctx, x, y, 'PASSIFS');
-      y += 16;
-      for (const st of RUN) {
-        const v = vals[st.id];
-        const n = taken[st.id] || 0;
-        const maxed = isMaxed(st, n, v.v);
-        let val = v.txt(v.v);
-        if (CFG.counts) val += '   ' + (st.max ? n + '/' + st.max : String(n));
-        row(ctx, x, w, y, st.label, val,
-          n > 0 ? (maxed ? '#9ae6ff' : '#ffd23f') : 'rgba(210,222,240,.6)');
-        y += CFG.row;
-      }
-    }
-
-    /* --- les stats du jeu, dernier instantané de pause --- */
     if (CFG.stats) {
-      header(ctx, x, y, 'STATS' + (age ? ' · ' + age : ''));
+      header(ctx, x, y, snap ? 'STATS' + (age ? ' · ' + age : '') : 'STATS');
       y += 16;
       if (!snap) {
         row(ctx, x, w, y, 'Ouvre la pause', 'Échap', 'rgba(210,222,240,.5)', true);
         y += CFG.row;
       } else {
-        // Attaque et Att. Spé. : le côté fort est mis en avant, c'est ce qui
-        // décide quels mouvements valent le coup depuis la mise à jour.
-        const fortPhy = (snap.atk || '') >= (snap.satk || '');
-        row(ctx, x, w, y, 'Attaque', snap.atk, fortPhy ? '#ff8d5e' : 'rgba(210,222,240,.6)', stale); y += CFG.row;
-        row(ctx, x, w, y, 'Att. Spé.', snap.satk, fortPhy ? 'rgba(210,222,240,.6)' : '#c47bff', stale); y += CFG.row;
-        row(ctx, x, w, y, 'Défense', snap.def, 'rgba(210,222,240,.75)', stale); y += CFG.row;
-        row(ctx, x, w, y, 'Déf. Spé.', snap.sdef, 'rgba(210,222,240,.75)', stale); y += CFG.row;
-        row(ctx, x, w, y, 'Critique', snap.crit, '#ffd23f', stale); y += CFG.row;
+        // Le côté fort décide quels mouvements valent le coup : on le colore.
+        // (Comparaison numérique, pas textuelle : « ×10,5 » > « ×9,8 ».)
+        const nb = v => parseFloat(String(v).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+        const phy = nb(snap.atk) >= nb(snap.satk);
+        for (const r of SHOWN) {
+          const col = r.k === 'atk' ? (phy ? '#ff8d5e' : 'rgba(210,222,240,.6)')
+            : r.k === 'satk' ? (phy ? 'rgba(210,222,240,.6)' : '#c47bff')
+            : r.k === 'crit' ? '#ffd23f'
+            : 'rgba(210,222,240,.78)';
+          row(ctx, x, w, y, r.label, snap[r.k] || '—', col, stale && !r.fixe);
+          y += CFG.row;
+        }
+      }
+      // Aimant et XP : suivis par nous, donc toujours exacts — jamais grisés.
+      if (CFG.extras) {
+        for (const e of EXTRAS) {
+          const v = vals[e.id], n = taken[e.id] || 0;
+          const st = RUN.find(r => r.id === e.id);
+          row(ctx, x, w, y, e.label, v.txt(v.v),
+            n > 0 ? (isMaxed(st, n, v.v) ? '#9ae6ff' : '#ffd23f') : 'rgba(210,222,240,.6)');
+          y += CFG.row;
+        }
       }
     }
 
-    /* --- dégâts par seconde de chaque attaque --- */
     if (CFG.degats) {
       header(ctx, x, y, 'DÉGÂTS / s');
       y += 16;
@@ -547,7 +574,7 @@
 
   // Pour les tests (node) : rien n'est exposé à la page en dehors de __psx.
   if (typeof module === 'object' && module.exports) {
-    module.exports = { CFG, SHOP, RUN, PAUSE_ROWS, IDX, compute, readBase, statOf, titleOf, inRun, isMaxed, DEFAULT_BASE, readPause, _snap: () => snap, _take: take, _newChoice: () => { picked = false; }, _reset: startRun, _state: () => ({ base, taken, get picked() { return picked; } }) };
+    module.exports = { CFG, SHOP, RUN, PAUSE_ROWS, IDX, SHOWN, EXTRAS, compute, readBase, statOf, titleOf, inRun, isMaxed, DEFAULT_BASE, readPause, _snap: () => snap, _take: take, _newChoice: () => { picked = false; }, _reset: startRun, _state: () => ({ base, taken, get picked() { return picked; } }) };
   }
 
   PSX.stats = VERSION;     // tape `__psx` dans la console : dit ce qui a chargé

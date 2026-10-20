@@ -34,7 +34,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.6.0';
+  const VERSION = '0.7.0';
 
   const CFG = {
     lowHp: 0.20,          // seuil du contour rouge

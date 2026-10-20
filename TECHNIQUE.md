@@ -239,8 +239,42 @@ Deux précautions :
   « ×2,41 » et « 12.345 » n'ont pas à être réinterprétés — et il n'y a aucune
   ambiguïté séparateur de milliers / décimale à se tromper.
 
-Contrepartie : les valeurs sont un instantané de la dernière pause. Le panneau
-en affiche l'âge et grise le bloc au-delà de 3 minutes.
+### Ce qui peut être en direct, et ce qui ne peut pas
+
+`pauseSummary()` est la seule fonction du jeu qui calcule Attaque, Att. Spé. et
+les dégâts par mouvement, et elle ne tourne qu'à l'ouverture de la pause. Il n'y
+a donc pas de lecture continue possible — et simuler un appui sur `Échap`
+mettrait la partie du joueur en pause, ce qui est hors de question.
+
+Mais en lisant les sources de près, le partage n'est pas celui qu'on croit :
+
+| Valeur | Nature | Fraîcheur réelle |
+|---|---|---|
+| Défense, Déf. Spé. | `mon.df` / `mon.sd`, bases d'espèce | **exactes toute la run** |
+| Critique | `perks.crit`, posé au démarrage | **exact toute la run** |
+| Aimant, XP | suivis par l'extension (boutique + cartes) | **en direct** |
+| Attaque, Att. Spé. | `atk × fit × bonus` | instantané |
+| Vitesse | dépend en plus de la météo, du terrain, des ralentissements | instantané |
+| Armure, Recharge, Régén., dégâts/s | cumulent cartes et objets | instantané |
+
+Cinq lignes sur onze ne peuvent donc pas se périmer, et `SHOWN[].fixe` les
+marque : seules les autres sont grisées au-delà de 3 minutes. La version
+précédente grisait tout le bloc, ce qui laissait croire que des constantes
+d'espèce vieillissaient.
+
+Recalculer les lignes « instantané » nous-mêmes aurait supposé d'embarquer les
+données des 966 Pokémon (`pa`, `sa`, `df`, `sd`) — une dette qui se périme à
+chaque rééquilibrage — pour un résultat qui dériverait dès qu'un objet entre en
+jeu, puisque l'extension ne voit pas les objets. Un nombre faux qui a l'air
+mesuré est pire qu'un nombre daté.
+
+### Pourquoi le bloc « PASSIFS » a disparu
+
+Il affichait les multiplicateurs suivis par l'extension : dégâts, vitesse,
+cadence, armure, régénération, vie max. Or le résumé du jeu donne **les mêmes
+grandeurs**, en valeurs absolues et en tenant compte des objets — donc deux
+colonnes de chiffres pour la même chose, avec des conventions différentes. Ne
+restent que `Aimant` et `XP`, les deux seuls passifs absents du résumé.
 
 ## Compatibilité avec le CSP du jeu
 

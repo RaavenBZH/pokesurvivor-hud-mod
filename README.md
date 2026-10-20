@@ -51,12 +51,12 @@ partie.
 En jeu, `F12` → onglet Console :
 
 ```
-[psx] hud-mod 0.6.0 installé — barres de vie en bas au centre
-[psx] stats-mod 0.6.0 installé — panneau des passifs (F2 pour masquer)
+[psx] hud-mod 0.7.0 installé — barres de vie en bas au centre
+[psx] stats-mod 0.7.0 installé — panneau des passifs (F2 pour masquer)
 ```
 
 Ou tape `__psx` dans la console : tu dois voir
-`{painting: false, hud: "0.6.0", stats: "0.6.0"}`.
+`{painting: false, hud: "0.7.0", stats: "0.7.0"}`.
 
 | Console | Cause | Remède |
 |---|---|---|
@@ -69,7 +69,7 @@ Ou tape `__psx` dans la console : tu dois voir
 > pas de façon fiable. Joue dans un onglet.
 
 ### Note sur Tampermonkey
-Les versions ≤ 0.3.2 proposaient aussi un userscript. **Abandonné en 0.6.0** :
+Les versions ≤ 0.3.2 proposaient aussi un userscript. **Abandonné en 0.7.0** :
 depuis Chrome 120, Tampermonkey exige de toute façon le mode développeur, et il
 n'obéit pas toujours à `@inject-into page` — or ce mod n'a aucun sens hors du
 monde de la page. L'extension ne coûte donc pas plus cher et ne laisse aucune
@@ -103,64 +103,64 @@ Sentencia. Chaque flèche garde son dessin, sa couleur, son icône et son
 
 ### Le panneau
 
-En haut à gauche, pendant la partie, en trois blocs :
+En haut à gauche, pendant la partie :
 
 ```
-  PASSIFS
-  Vie max.       +120
-  Dégâts        ×1.45
-  Vitesse       ×1.24
-  Cadence       ×1.10
-  Armure         26 %
-  Régén.        1.3/s
-  Aimant        ×1.24
-  XP            ×1.30
-
   STATS · il y a 2 min
   Attaque       ×2,41
   Att. Spé.     ×1,18
   Défense          40
   Déf. Spé.        50
+  Vitesse         132
   Critique        9 %
+  Armure         26 %
+  Recharge      −18 %
+  Régén.       1,3 /s
+  Aimant        ×1,69
+  XP            ×1,30
 
   DÉGÂTS / s
   Flammèche     412/s
   Rayo Burbuja   96/s
 ```
 
-**PASSIFS** suit en direct ce que la run a amélioré (voir plus bas).
+Les neuf premières lignes sont les statistiques que le jeu calcule, dont celles
+ajoutées le 18-10-2026 : **Attaque et Attaque Spéciale séparées** — chaque
+mouvement est désormais physique ou spécial, et taper du mauvais côté coûte
+cher — puis les deux défenses. **Le côté fort est mis en couleur** : c'est lui
+qui décide quels mouvements valent le coup.
 
-**STATS** montre les statistiques que le jeu a ajoutées le 18-10-2026 : Attaque
-et Attaque Spéciale séparées — chaque mouvement est désormais physique ou
-spécial, et taper du mauvais côté coûte cher — puis les deux défenses et le taux
-de critique. **Le côté fort est mis en couleur** : c'est lui qui décide quels
-mouvements valent le coup.
+**Aimant** et **XP** sont les deux seuls passifs que le jeu n'affiche nulle
+part : l'extension les suit elle-même, exactement, donc ils sont toujours à
+jour.
 
 **DÉGÂTS / s** donne les dégâts par seconde de chacune de tes attaques, soit
 laquelle porte réellement ta run.
 
-> Ces deux derniers blocs viennent du **résumé de la pause** : le jeu les
-> calcule, l'extension les lit là. Ils ne se rafraîchissent donc qu'à chaque
-> ouverture de la pause (`Échap`), et le panneau affiche l'âge de la mesure —
-> grisée au-delà de 3 minutes. Avant la première pause, il affiche
-> « Ouvre la pause ».
->
-> Pourquoi pas en direct ? Ces valeurs viennent des données d'espèce des
-> 966 Pokémon : le jeu ne les dessine jamais en partie et ne les sert pas à
-> part. Les recopier dans l'extension aurait créé une dette qui se périme à
-> chaque rééquilibrage. Les lire là où le jeu les affiche lui-même, c'est zéro
-> duplication et zéro dérive.
+### À jour ou pas ?
 
-- La valeur est le **total** : améliorations achetées en boutique **plus** cartes
-  prises dans la run.
-- **Couleur** : doré quand la run a amélioré ce passif, **bleu clair quand il est
-  au plafond** (inutile d'en reprendre), gris quand la run n'y a pas touché.
-- **Cadence** est l'inverse de la recharge : `×1.10` = tu attaques 10 % plus
-  souvent. Le jeu raisonne en « −8 % de recharge », ce qui se lit à l'envers des
-  autres lignes — d'où l'inversion.
-- **Armure** est la réduction des dégâts subis, plafonnée à 70 % par le jeu.
+| Ligne | Source | Fraîcheur |
+|---|---|---|
+| Défense, Déf. Spé. | bases d'espèce (`mon.df`, `mon.sd`) | **exactes toute la run** — elles ne changent jamais |
+| Critique | boutique, posé au démarrage | **exact toute la run** |
+| Aimant, XP | suivis par l'extension | **en direct** |
+| Attaque, Att. Spé., Vitesse, Armure, Recharge, Régén., dégâts/s | résumé de la pause | instantané — âge affiché dans l'en-tête |
 
-### Les plafonds
+Les lignes du dernier groupe sont **grisées** au-delà de 3 minutes ; les trois
+premiers groupes ne le sont jamais, puisqu'ils ne peuvent pas se périmer.
+Appuie sur `Échap` pour rafraîchir.
+
+> **Pourquoi pas tout en direct ?** `pauseSummary()` est la seule fonction du
+> jeu qui calcule Attaque, Att. Spé. et les dégâts par mouvement, et elle ne
+> tourne qu'à l'ouverture de la pause. L'extension ne va pas simuler un appui
+> sur `Échap` : ça mettrait ta partie en pause. Et les recalculer elle-même
+> supposerait d'embarquer les données des 966 Pokémon, qui se périment à chaque
+> rééquilibrage, pour un résultat qui dériverait dès qu'un objet entre en jeu.
+> Lire ce que le jeu affiche lui-même reste la seule voie sans duplication ni
+> valeur fausse — et pour trois lignes sur onze, la question ne se pose même
+> pas.
+
+### Les plafonds des cartes
 
 Le jeu limite le nombre de fois qu'une carte peut être prise — mais **pas pour
 tous les passifs** :
@@ -178,14 +178,15 @@ tous les passifs** :
 
 L'armure est le seul cas à deux plafonds : si tu as acheté les 8 niveaux de
 boutique (+16 %), les 70 % tombent dès la **9ᵉ** prise et les trois suivantes ne
-servent plus à rien. Le panneau le signale en passant la ligne en bleu clair.
+servent plus à rien.
 
 À part ça, la cadence a un plancher : la recharge réelle d'un mouvement ne
 descend jamais sous 0,12 s, donc les dernières prises rapportent moins sur les
 attaques déjà rapides.
 
-`counts: true` dans `src/ui/stats-mod.js` ajoute le détail « prises / plafond »
-(`2/40`) à droite de chaque ligne, si tu veux suivre ça de près.
+Dans le panneau, **Aimant** et **XP** passent en bleu clair quand leur plafond
+est atteint — inutile d'en reprendre. Les autres lignes venant du résumé du
+jeu, elles n'ont pas de compteur de prises.
 
 **`F2` affiche / masque le panneau.** Cette touche n'est pas utilisée par le jeu.
 
@@ -225,10 +226,9 @@ const CFG = {
   x: 18, y: 80,       // coin haut-gauche, en px
   w: 150,             // largeur
   row: 15,            // hauteur d'une ligne
-  counts: false,      // true pour ajouter « 3/8 » (prises / plafond)
-  passifs: true,      // bloc PASSIFS
-  stats: true,        // bloc STATS (résumé de pause)
-  degats: true        // bloc DÉGÂTS / s (résumé de pause)
+  stats: true,        // les statistiques du jeu
+  extras: true,       // Aimant et XP
+  degats: true        // dégâts par seconde de chaque attaque
 };
 ```
 
@@ -253,6 +253,12 @@ Retélécharge le zip de la [dernière version](../../releases/latest) et rempla
 le dossier — ou `git pull` si tu as cloné. Puis **↻** sur la carte du mod dans
 `chrome://extensions`, et recharge la page du jeu.
 
+### b) Quand le jeu se met à jour tout seul
+Le jeu vérifie sa version toutes les 5 minutes et recharge la page quand une
+nouvelle sort (parfois en coupant la partie en cours, si l'auteur l'a marquée
+obligatoire). **Tu n'as rien à faire** : les extensions Chrome se réinjectent à
+chaque chargement de page, donc le mod revient tout seul.
+
 ### b-bis) Après avoir modifié le code toi-même
 1. `chrome://extensions` → bouton **↻** sur la carte du mod.
 2. Recharge la page du jeu (`Ctrl+R` / `Cmd+R`).
@@ -264,12 +270,6 @@ node test/stats-mod.test.js    # panneau des passifs
 node tools/build.js            # refait dist/ (zip + userscript)
 node test/dist.test.js         # teste l'artéfact publié
 ```
-
-### b) Quand le jeu se met à jour tout seul
-Le jeu vérifie sa version toutes les 5 minutes et recharge la page quand une
-nouvelle sort (parfois en coupant la partie en cours, si l'auteur l'a marquée
-obligatoire). **Tu n'as rien à faire** : les extensions Chrome se réinjectent à
-chaque chargement de page, donc le mod revient tout seul.
 
 ### c) Quand le jeu change son HUD
 
@@ -370,8 +370,8 @@ clone du jeu — voir §4c.
 | `[psx] hud-mod désarmé : …` en console | 30 erreurs d'affilée, le module s'est coupé | Note le message et relance `node tools/verif-signatures.js` puis `node test/hud-mod.test.js` |
 | Les flèches restent au bord | `arrows: false`, ou les marges ont changé | §3, puis §4c |
 | Pas de panneau | masqué (`F2`), ou `show: false` | Appuie sur `F2` en partie |
-| STATS et DÉGÂTS disent « Ouvre la pause » | aucun instantané encore pris | Appuie une fois sur `Échap` en partie |
-| STATS grisées | instantané de plus de 3 min | Rouvre la pause pour rafraîchir |
+| « Ouvre la pause » | aucun instantané encore pris | Appuie une fois sur `Échap` en partie |
+| Des lignes grisées | instantané de plus de 3 min | Rouvre la pause ; Défense, Déf. Spé., Critique, Aimant et XP ne grisent jamais |
 | `Aucun appel de dessin observé sur #game` | le mod tourne hors du monde de la page | `manifest.json` doit déclarer `"world": "MAIN"` |
 | Les passifs affichent des valeurs douteuses | le jeu a été rééquilibré | §4c — c'est exactement ce que le script détecte |
 | Les passifs partent d'une base fausse | achat en boutique pas encore enregistré | Reviens au menu puis relance une partie |
@@ -403,11 +403,12 @@ le jeu d'origine.
   encore enregistrée n'est pas comptée (reviens au menu et relance une partie),
   et un rééquilibrage du jeu fausserait les chiffres sans rien casser — d'où le
   script de vérification (§4c).
-- **Les objets ramassés en jeu** (qui donnent aussi des effets) ne sont pas
-  comptés dans le bloc PASSIFS : seules les cartes de niveau le sont. Ils sont
-  en revanche inclus dans le bloc STATS, puisque le jeu les y intègre.
-- **STATS et DÉGÂTS / s** sont un instantané de la dernière pause, pas du
-  direct — pour la raison expliquée en §2.
+- **Attaque, Att. Spé., Vitesse, Armure, Recharge, Régén. et les dégâts/s**
+  sont un instantané de la dernière pause, pas du direct — raison expliquée
+  en §2. Les cinq autres lignes sont exactes en permanence.
+- **Les objets ramassés en jeu** sont inclus dans les lignes du résumé
+  (le jeu les y intègre) mais pas dans Aimant / XP, que l'extension suit à
+  partir des seules cartes de niveau.
 
 ---
 
